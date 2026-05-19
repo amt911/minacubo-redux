@@ -6,12 +6,14 @@ coverage/
 .vscode/
 .idea/
 graphify-out/
+resources/
+libs/
 *.log
 .DS_Store
 .env
 .env.local
-Dockerfile
-docker-compose.yml
+Dockerfile*
+docker-compose*.yml
 .dockerignore
 .gitignore
 .prettierignore
@@ -19,5 +21,6 @@ docker-compose.yml
 eslint.config.js
 vitest.config.js
 jsconfig.json
+makefile
+scripts/
 TODO.md
-README.md

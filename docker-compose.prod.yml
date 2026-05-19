@@ -1,0 +1,9 @@
+services:
+  minacubo:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: minacubo-redux-prod
+    ports:
+      - "8080:80"
+    restart: unless-stopped
