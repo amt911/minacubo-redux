@@ -1,0 +1,6 @@
+libs/
+texturas/
+node_modules/
+coverage/
+graphify-out/
+package-lock.json
