@@ -1,11 +1,11 @@
 
 // Clases de la biblioteca
 
-import * as THREE from '../libs/three.module.js'
-import { GUI } from '../libs/dat.gui.module.js'
-import { OrbitControls } from '../libs/OrbitControls.js'
-import { Stats } from '../libs/stats.module.js'
-import * as TWEEN from "../libs/tween.esm.js"
+import * as THREE from 'three'
+import GUI from 'lil-gui'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import Stats from 'three/addons/libs/stats.module.js'
+import * as TWEEN from '@tweenjs/tween.js'
 // Clases de mi proyecto
 
 import { Esteban } from './Esteban.js'
@@ -104,7 +104,7 @@ class MyScene extends THREE.Scene {
     //this.DISTANCIA_RENDER = 5;    
     this.h = new cubos.Hierba();
     let matrix = new THREE.Matrix4();
-    noise.seed(Math.random());
+    this.noise = new Noise(Math.random());
     this.amplitud = 1 + (Math.random() * 45);
     let inc = 0.02;
     let xoff;
@@ -220,7 +220,7 @@ this.puntoscerdos = [];
             xoff = inc * x;
             zoff = inc * z;
 
-            let v = Math.round(noise.perlin2(xoff, zoff) * this.amplitud);
+            let v = Math.round(this.noise.perlin2(xoff, zoff) * this.amplitud);
             if(i == 0 && j == 0){
               if(zombiex + i*this.TAM_CHUNK == x && zombiez + j*this.TAM_CHUNK == z){
                 zombiey = v;
@@ -369,7 +369,7 @@ this.puntoscerdos = [];
     stats.domElement.style.left = '0px';
     stats.domElement.style.top = '0px';
 
-    $("#Stats-output").append(stats.domElement);
+    document.querySelector('#Stats-output').appendChild(stats.domElement);
 
     this.stats = stats;
   }
@@ -445,7 +445,7 @@ this.puntoscerdos = [];
     renderer.setSize(window.innerWidth, window.innerHeight);
 
     // La visualización se muestra en el lienzo recibido
-    $(myCanvas).append(renderer.domElement);
+    document.querySelector(myCanvas).appendChild(renderer.domElement);
 
     return renderer;
   }
@@ -894,7 +894,7 @@ this.puntoscerdos = [];
                 xoff = inc * z;
                 zoff = inc * x;
 
-                let v = Math.round(noise.perlin2(xoff, zoff) * this.amplitud);
+                let v = Math.round(this.noise.perlin2(xoff, zoff) * this.amplitud);
                 matrix.setPosition(z * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR, x * 16 / PM.PIXELES_ESTANDAR);
                 this.mesh["Hierba"].setMatrixAt(l["Hierba"], matrix);
 
@@ -1066,7 +1066,7 @@ this.puntoscerdos = [];
 
 
 /// La función   main
-$(function () {
+window.addEventListener('DOMContentLoaded', function () {
   // Se instancia la escena pasándole el  div  que se ha creado en el html para visualizar
   let scene = new MyScene("#WebGL-output");
   const canvas = scene.renderer.domElement

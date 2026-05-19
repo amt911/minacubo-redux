@@ -1,5 +1,4 @@
-import * as THREE from '../libs/three.module.js'
-//import * as THREE from 'https://unpkg.com/three@0.140.2/build/three.module.js';
+import * as THREE from 'three'
 import * as PM from './ParametrosMundo.js'
 
 

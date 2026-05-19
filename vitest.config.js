@@ -8,9 +8,9 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html', 'lcov'],
       exclude: [
-        'libs/**',
         'texturas/**',
         'coverage/**',
+        'resources/**',
         '**/*.config.js',
         '**/*.test.js',
       ],

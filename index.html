@@ -5,10 +5,19 @@
 <head>
     <title>MinaCubo: El juego</title>
     <meta charset="utf-8">
-    <script type="text/javascript" src="../libs/jquery.js"></script>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/node_modules/three/build/three.module.js",
+          "three/addons/": "/node_modules/three/examples/jsm/",
+          "lil-gui": "/node_modules/lil-gui/dist/lil-gui.esm.min.js",
+          "@tweenjs/tween.js": "/node_modules/@tweenjs/tween.js/dist/tween.esm.js"
+        }
+      }
+    </script>
+    <script src="/node_modules/noisejs/index.js"></script>
     <script type="module" src="MyScene.js"></script>
-    <script src="../libs/perlin.js"></script>
-    <!--<script src="../libs/threex.daynight.js"></script>-->
 	<link rel="stylesheet" type="text/css" href="estilo.css" />
 
     <style>

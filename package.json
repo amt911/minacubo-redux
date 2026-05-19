@@ -5,12 +5,16 @@
   "type": "module",
   "description": "Minecraft-like voxel game built with Three.js, vanilla ES modules.",
   "scripts": {
-    "dev": "docker compose up",
-    "dev:detached": "docker compose up -d",
-    "dev:local": "npx serve .",
-    "stop": "docker compose down",
-    "logs": "docker compose logs -f",
-    "rebuild": "docker compose build --no-cache",
+    "dev": "serve -l 3000 .",
+    "compose:up": "docker compose up --build",
+    "compose:up:detached": "docker compose up -d --build",
+    "compose:down": "docker compose down",
+    "compose:restart": "docker compose down && bash scripts/reset-node-modules.sh && docker compose up --build",
+    "compose:reinstall-deps": "bash scripts/reset-node-modules.sh",
+    "compose:logs": "docker compose logs -f",
+    "compose:shell": "docker compose exec minacubo sh",
+    "compose:prod": "docker compose -f docker-compose.prod.yml up --build",
+    "compose:prod:down": "docker compose -f docker-compose.prod.yml down",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --passWithNoTests",
@@ -26,6 +30,13 @@
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.8.3",
+    "serve": "^14.2.6",
     "vitest": "^4.1.6"
+  },
+  "dependencies": {
+    "@tweenjs/tween.js": "^25.0.0",
+    "lil-gui": "^0.21.0",
+    "noisejs": "^2.1.0",
+    "three": "^0.140.2"
   }
 }
