@@ -21,6 +21,7 @@ Roadmap para robustez (Docker, tests, TDD) y mejoras de juego.
 
 ## Fase 2 — TDD lógica pura
 
+- [ ] Usar npm para los paquetes, ahora mismo están copiados a lo cutre
 - [ ] Mejorar la lógica por completo de colisiones. Ahora mismo va muy mal (si se pone debajo de un árbol y se salta se sube automáticamente a la copa, si se colisiona contra un cubo y se sigue andando tiembla, etc)
 - [ ] Extraer AABB de `colisiones.js` a función pura testable
 - [ ] Escribir `colisiones.test.js` (overlap total, tangente, eje único, sin overlap)
