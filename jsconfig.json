@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "checkJs": false,
+    "allowJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
+      "libs/*": ["libs/*"]
+    }
+  },
+  "include": ["**/*.js"],
+  "exclude": ["node_modules", "libs", "coverage", "graphify-out"]
+}

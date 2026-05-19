@@ -107,8 +107,8 @@ class MyScene extends THREE.Scene {
     noise.seed(Math.random());
     this.amplitud = 1 + (Math.random() * 45);
     let inc = 0.02;
-    let xoff = 0;
-    let zoff = 0;
+    let xoff;
+    let zoff;
 
 
     //this.puntoscerdos = [[]];
@@ -857,8 +857,8 @@ this.puntoscerdos = [];
       };
 
       let inc = 0.02;
-      let xoff = 0;
-      let zoff = 0;
+      let xoff;
+      let zoff;
       let matrix = new THREE.Matrix4();
       let contador=0, contador2=0, contador3=0, contador4=0;
 

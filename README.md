@@ -1,5 +1,8 @@
 # MinaCubo Redux
 
+[![CI](https://github.com/amt911/minacubo-redux/actions/workflows/ci.yml/badge.svg)](https://github.com/amt911/minacubo-redux/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/amt911/minacubo-redux?label=coverage)](https://codecov.io/gh/amt911/minacubo-redux)
+
 A Minecraft-inspired voxel game running in the browser, built with [Three.js](https://threejs.org/).
 
 ## Origin

@@ -4,23 +4,25 @@ Roadmap para robustez (Docker, tests, TDD) y mejoras de juego.
 
 ## Fase 1 — Tooling base
 
-- [ ] Crear `.gitignore` (node_modules, coverage, .DS_Store)
-- [ ] Inicializar `package.json` con scripts `dev` / `test` / `lint` / `format`
-- [ ] Instalar Vitest + jsdom como devDependencies
-- [ ] Crear `vitest.config.js` (environment node, coverage v8)
-- [ ] Configurar ESLint flat config + reglas básicas
-- [ ] Configurar Prettier (`.prettierrc`) + `.prettierignore`
-- [ ] Añadir `jsconfig.json` con `checkJs` + paths
-- [ ] Añadir `// @ts-check` a archivos JS principales
-- [ ] Crear `Dockerfile` (nginx:alpine sirviendo estáticos)
-- [ ] Crear `docker-compose.yml` con volume mount dev
-- [ ] Crear `.dockerignore`
-- [ ] Crear `.devcontainer/devcontainer.json`
-- [ ] Crear `.github/workflows/ci.yml` (lint + test en push/PR)
-- [ ] Añadir badge CI + cobertura al README
+- [x] Crear `.gitignore` (node_modules, coverage, .DS_Store)
+- [x] Inicializar `package.json` con scripts `dev` / `test` / `lint` / `format`
+- [x] Instalar Vitest + jsdom como devDependencies
+- [x] Crear `vitest.config.js` (environment node, coverage v8)
+- [x] Configurar ESLint flat config + reglas básicas
+- [x] Configurar Prettier (`.prettierrc`) + `.prettierignore`
+- [x] Añadir `jsconfig.json` con `checkJs` + paths
+- [x] Añadir `// @ts-check` a archivos JS principales
+- [x] Crear `Dockerfile` (nginx:alpine sirviendo estáticos)
+- [x] Crear `docker-compose.yml` con volume mount dev
+- [x] Crear `.dockerignore`
+- [x] Crear `.devcontainer/devcontainer.json`
+- [x] Crear `.github/workflows/ci.yml` (lint + test en push/PR)
+- [x] Añadir badge CI + cobertura al README
 
 ## Fase 2 — TDD lógica pura
 
+- [ ] Usar npm para los paquetes, ahora mismo están copiados a lo cutre
+- [ ] Mejorar la lógica por completo de colisiones. Ahora mismo va muy mal (si se pone debajo de un árbol y se salta se sube automáticamente a la copa, si se colisiona contra un cubo y se sigue andando tiembla, etc)
 - [ ] Extraer AABB de `colisiones.js` a función pura testable
 - [ ] Escribir `colisiones.test.js` (overlap total, tangente, eje único, sin overlap)
 - [ ] Tests `ParametrosMundo.js` (snapshot constantes)
