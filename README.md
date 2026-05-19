@@ -25,16 +25,28 @@ This repository is a fork by **Andrés Merlo Trujillo**, continued as a personal
 
 ## Running
 
-No build step required. Serve the directory with any static file server:
-
 ```bash
-npx serve .
+npm install            # one-time, populates node_modules/
+npm run dev            # local: serve -l 3000 . → http://localhost:3000
 # or
-python3 -m http.server 8080
-# or use Live Server in VS Code
+make up                # Docker dev → http://localhost:8080
+# or
+make prod              # Docker prod (nginx multi-stage) → http://localhost:8080
 ```
 
-Then open `index.html` in the browser.
+No bundler — browser resolves deps via `<script type="importmap">` in `index.html` pointing at `/node_modules/...`.
+
+### Make targets
+
+| `make ...` | Acción |
+| --- | --- |
+| `up` / `up-d` | dev container (foreground / detached) |
+| `down` | parar dev |
+| `restart` | down + reset node_modules volume + up (cuando cambien deps) |
+| `logs` | tail logs |
+| `shell` | shell dentro del container |
+| `prod` / `prod-down` | container prod nginx |
+| `clean` | down + remove volumes + remove images |
 
 ## Controls
 
@@ -51,18 +63,23 @@ Then open `index.html` in the browser.
 ## Structure
 
 ```
-index.html          Entry point
-MyScene.js          Main scene, game loop, chunk system
-Cubo.js             Block type definitions (geometry + textures)
-Esteban.js          Player character
-Zombie.js           Zombie NPC
-Cerdo.js            Pig NPC
-estructuras.js      Composite structures (oak tree)
-colisiones.js       Collision detection
-ParametrosMundo.js  World constants
-libs/               Vendored libraries (Three.js, dat.GUI, Perlin, TWEEN…)
-texturas/           Block and GUI textures
+index.html            Entry point (importmap + script tags + DOM)
+MyScene.js            Main scene, game loop, chunk system
+Cubo.js               Block type definitions (geometry + textures)
+Esteban.js            Player character
+Zombie.js             Zombie NPC
+Cerdo.js              Pig NPC
+estructuras.js        Composite structures (oak tree)
+colisiones.js         Collision detection
+ParametrosMundo.js    World constants
+texturas/             Block and GUI textures
+Dockerfile.dev/.prod  Docker images (dev node + prod nginx multi-stage)
+docker-compose*.yml   Compose definitions for dev y prod
+makefile              Shortcuts (make up / down / prod / clean)
+scripts/              Helpers (reset-node-modules.sh)
 ```
+
+Runtime deps (`three`, `lil-gui`, `@tweenjs/tween.js`, `noisejs`) live in `node_modules/` via npm.
 
 ## License
 
