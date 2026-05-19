@@ -1,3 +1,4 @@
+// @ts-check
 import * as THREE from '../libs/three.module.js'
 import * as PM from './ParametrosMundo.js'
 

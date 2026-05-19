@@ -1,3 +1,4 @@
+// @ts-check
 class ParametrosMundo{
   static PIXELES_ESTANDAR = 16;
 }

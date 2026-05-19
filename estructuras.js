@@ -1,3 +1,4 @@
+// @ts-check
 import * as PM from './ParametrosMundo.js'
 
 class ArbolRoble {
