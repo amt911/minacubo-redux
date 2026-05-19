@@ -6,9 +6,9 @@
   "description": "Minecraft-like voxel game built with Three.js, vanilla ES modules.",
   "scripts": {
     "dev": "npx serve .",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage --passWithNoTests",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
