@@ -92,7 +92,7 @@ describe('terrainHeight', () => {
     expect(terrainHeight(n, 10, 20)).toBe(terrainHeight(n, 10, 20));
   });
 
-  it('mayoria del mapa esta a baja altura (plain-dominant)', () => {
+  it('mayoria del mapa esta dentro del rango de colinas (hill-dominant)', () => {
     const n = createTerrainNoise(2024);
     const samples = [];
     for (let x = 0; x < 100; x++) {
@@ -100,11 +100,11 @@ describe('terrainHeight', () => {
         samples.push(terrainHeight(n, x, z));
       }
     }
-    const low = samples.filter((h) => h <= 3).length;
-    expect(low / samples.length).toBeGreaterThan(0.5);
+    const inHillRange = samples.filter((h) => h >= -2 && h <= 10).length;
+    expect(inHillRange / samples.length).toBeGreaterThan(0.7);
   });
 
-  it('hay picos altos ocasionales (mountains)', () => {
+  it('hay picos dramaticos ocasionales (mountains)', () => {
     const n = createTerrainNoise(2024);
     let max = -Infinity;
     for (let x = 0; x < 200; x++) {
@@ -112,7 +112,7 @@ describe('terrainHeight', () => {
         max = Math.max(max, terrainHeight(n, x, z));
       }
     }
-    expect(max).toBeGreaterThanOrEqual(8);
+    expect(max).toBeGreaterThanOrEqual(15);
   });
 
   it('alturas son enteros (Math.round aplicado)', () => {

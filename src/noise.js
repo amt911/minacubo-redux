@@ -60,40 +60,50 @@ export function fbm(noiseFn, x, y, opts = {}) {
 }
 
 /**
- * Minecraft-style terrain height: mostly flat plains with sparse mountain
- * peaks. Combines:
- *   - low-amplitude FBM at higher freq for gentle hills.
- *   - low-freq noise with threshold for sparse mountain contributions.
+ * Minecraft-style terrain height: three layers stacked.
+ *   - Detail: high-freq noise (~1 block of roughness).
+ *   - Hills: mid-freq FBM (rolling terrain, ~5 blocks of variation).
+ *   - Mountains: low-freq noise with threshold + exponential curve for
+ *     dramatic sparse peaks (~20 blocks above baseline).
+ * A baseline lifts everything so the ground sits comfortably above y=0.
  *
  * @param {(x: number, y: number) => number} noiseFn
  * @param {number} x  world coord
  * @param {number} z  world coord
  * @param {object} [opts]
- * @param {number} [opts.plainFreq]       default 0.02
- * @param {number} [opts.plainAmplitude]  default 1.5 (max plain height ~3)
- * @param {number} [opts.mountainFreq]    default 0.008
- * @param {number} [opts.mountainAmplitude] default 12
- * @param {number} [opts.mountainThreshold] in [-1, 1], default 0.3
+ * @param {number} [opts.baseline]          default 3
+ * @param {number} [opts.detailFreq]        default 0.05
+ * @param {number} [opts.detailAmplitude]   default 1
+ * @param {number} [opts.hillFreq]          default 0.015
+ * @param {number} [opts.hillAmplitude]     default 5
+ * @param {number} [opts.mountainFreq]      default 0.006
+ * @param {number} [opts.mountainAmplitude] default 20
+ * @param {number} [opts.mountainThreshold] in [-1, 1], default 0.4
+ * @param {number} [opts.mountainExponent]  curve sharpness, default 2.5
  * @returns {number} integer block height
  */
 export function terrainHeight(noiseFn, x, z, opts = {}) {
   const {
-    plainFreq = 0.02,
-    plainAmplitude = 1.5,
-    mountainFreq = 0.008,
-    mountainAmplitude = 12,
-    mountainThreshold = 0.3,
+    baseline = 3,
+    detailFreq = 0.05,
+    detailAmplitude = 1,
+    hillFreq = 0.015,
+    hillAmplitude = 5,
+    mountainFreq = 0.006,
+    mountainAmplitude = 20,
+    mountainThreshold = 0.4,
+    mountainExponent = 2.5,
   } = opts;
 
-  const plain = fbm(noiseFn, x * plainFreq, z * plainFreq, { octaves: 3 });
-  const plainBlocks = (plain + 1) * plainAmplitude;
+  const detail = noiseFn(x * detailFreq, z * detailFreq) * detailAmplitude;
+  const hills = fbm(noiseFn, x * hillFreq, z * hillFreq, { octaves: 3 }) * hillAmplitude;
 
   const mountainNoise = noiseFn(x * mountainFreq, z * mountainFreq);
   let mountainBlocks = 0;
   if (mountainNoise > mountainThreshold) {
     const t = (mountainNoise - mountainThreshold) / (1 - mountainThreshold);
-    mountainBlocks = t * mountainAmplitude;
+    mountainBlocks = Math.pow(t, mountainExponent) * mountainAmplitude;
   }
 
-  return Math.round(plainBlocks + mountainBlocks);
+  return Math.round(baseline + detail + hills + mountainBlocks);
 }
