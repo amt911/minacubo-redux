@@ -1,134 +1,113 @@
 // @ts-check
-import * as THREE from 'three'
-import * as PM from './ParametrosMundo.js'
-import { aabbIntersect } from './aabb.js'
+import * as THREE from 'three';
+import * as PM from './ParametrosMundo.js';
+import { resolveMovement, blockCentersToAABBs } from './voxelPhysics.js';
 
-const box3ToAABB = (b) => ({
-  min: { x: b.min.x, y: b.min.y, z: b.min.z },
-  max: { x: b.max.x, y: b.max.y, z: b.max.z },
-});
-
+/**
+ * Colisiones del personaje contra los bloques del mundo. La logica
+ * detallada (axis-separated sweep, sub-stepping, snap por cara) vive en
+ * `voxelPhysics.js` como funcion pura testeable. Esta clase es solo el
+ * adaptador entre el mundo del juego (personaje, boundingBox, gravedad,
+ * salto) y esa funcion.
+ */
 class Colisiones {
-    constructor(autojump, mitad) {
+  constructor(autojump, mitad) {
+    this.autojump = autojump;
+    this.mitad = mitad;
+    this.clock = new THREE.Clock();
+    this.caidaVel = -1;
+    this.caidaAcc = -42;
+  }
 
-        this.autojump = autojump;
-        this.mitad = mitad;
+  /**
+   * Avanza un frame de fisica para el personaje.
+   *
+   * @param {Array<{x:number,y:number,z:number}>} bloques bloques solidos cercanos (centros).
+   * @param {THREE.Object3D & {puedeSaltar?: boolean, altura?: number}} personaje
+   * @param {THREE.Object3D} boundingBox AABB visual del personaje.
+   * @param {Object<string, boolean>} teclasPulsadas mapa estado teclado.
+   * @param {THREE.Vector3} vectorDir direccion XZ de movimiento (sin normalizar).
+   * @param {number} velocidad magnitud del paso horizontal este frame.
+   */
+  update(bloques, personaje, boundingBox, teclasPulsadas, vectorDir, velocidad) {
+    const delta = this.clock.getDelta();
 
-        let bloqueRaroGeom = new THREE.BoxGeometry(1, 1, 1);
-
-        this.bloqueRaro = new THREE.Mesh(bloqueRaroGeom, new THREE.MeshBasicMaterial({ color: 0x00ff00 }));
-
-        //Poner el bloque como invisible
-        this.bloqueRaro.visible = false;
-
-        this.clock = new THREE.Clock();
-
-        this.caidaVel = -1;
-        this.caidaAcc = -42;
+    if (personaje.puedeSaltar && teclasPulsadas != null && teclasPulsadas[' ']) {
+      this.caidaVel = 10;
+      personaje.puedeSaltar = false;
     }
 
-colisionesSuelo(bloques, personaje, boundingBox) {
-    // Solo bloques cuyo TOP queda al nivel de la cabeza o por debajo
-    // cuentan como suelo. Las hojas/techos quedan estrictamente por
-    // encima → no actuan como suelo (no mas saltos a la copa del arbol).
-    // Para overshoot por gravedad la cabeza siempre va ~2u por delante
-    // de los pies (altura/PM = 32/16 = 2), asi que esto no rompe el
-    // landing en caso de delta grande por frame.
-    const headHalf = personaje.altura / PM.PIXELES_ESTANDAR / 2;
-    const playerHeadY = personaje.position.y + headHalf;
+    // Construye delta de movimiento de este frame:
+    //   XZ desde el input (vectorDir * velocidad)
+    //   Y desde la gravedad (caidaVel * delta_t)
+    const velocidadFinal = teclasPulsadas && teclasPulsadas['SHIFT'] ? velocidad * 2 : velocidad;
+    const dir = vectorDir.clone().normalize();
+    const moveDelta = {
+      x: dir.x * velocidadFinal,
+      y: this.caidaVel * delta,
+      z: dir.z * velocidadFinal,
+    };
 
-    for (let i = 0; i < bloques.length; i++) {
-            if (bloques[i].y + 0.5 > playerHeadY) continue;
+    // AABB actual del personaje en world space (boundingBox es 0.5 ancho,
+    // 2 alto, 0.5 fondo segun Esteban.js: 8/16 x 32/16 x 8/16).
+    const halfExtents = this._extraerHalfExtents(boundingBox);
+    const playerAABB = {
+      min: {
+        x: boundingBox.position.x - halfExtents.x,
+        y: boundingBox.position.y - halfExtents.y,
+        z: boundingBox.position.z - halfExtents.z,
+      },
+      max: {
+        x: boundingBox.position.x + halfExtents.x,
+        y: boundingBox.position.y + halfExtents.y,
+        z: boundingBox.position.z + halfExtents.z,
+      },
+    };
 
-            let bV = new THREE.Vector2(bloques[i].x, bloques[i].z);
-            let eV = new THREE.Vector2(personaje.position.x, personaje.position.z);
+    const blockAABBs = blockCentersToAABBs(bloques);
+    const result = resolveMovement(playerAABB, moveDelta, blockAABBs);
 
-            if (bV.distanceTo(eV) <= 0.8 && Math.abs((personaje.position.x) - (bloques[i].x)) >= 0 && Math.abs((personaje.position.z) - (bloques[i].z)) >= 0) {
-                this.bloqueRaro.position.set(bloques[i].x, bloques[i].y, bloques[i].z);
-                if (this.detectCollisionCharacterWorld(this.bloqueRaro, boundingBox)) {
-                    personaje.position.y = bloques[i].y + personaje.altura / PM.PIXELES_ESTANDAR / 2 - 0.5;
-                    boundingBox.position.y = personaje.position.y + (personaje.altura/2) / PM.PIXELES_ESTANDAR;
-                    this.caidaVel = 0;
-                    personaje.puedeSaltar = true;
+    // Aplica posicion resultante al boundingBox y a personaje.position.
+    // personaje.position.y se calcula manteniendo el offset original:
+    // boundingBox = personaje.position.y + altura/PM/2 (1u para altura=32).
+    const newBBox = result.aabb;
+    boundingBox.position.x = (newBBox.min.x + newBBox.max.x) / 2;
+    boundingBox.position.y = (newBBox.min.y + newBBox.max.y) / 2;
+    boundingBox.position.z = (newBBox.min.z + newBBox.max.z) / 2;
 
-                    break;
-                }
-            }
+    const offsetPersonajeY = personaje.altura ? personaje.altura / PM.PIXELES_ESTANDAR / 2 : 1;
+    personaje.position.x = boundingBox.position.x;
+    personaje.position.y = boundingBox.position.y - offsetPersonajeY;
+    personaje.position.z = boundingBox.position.z;
+
+    if (result.onGround) {
+      this.caidaVel = 0;
+      personaje.puedeSaltar = true;
+    } else {
+      this.caidaVel += this.caidaAcc * delta;
+      if (result.hitCeiling && this.caidaVel > 0) this.caidaVel = 0;
     }
+  }
+
+  _extraerHalfExtents(boundingBox) {
+    // BoxGeometry.parameters guarda width/height/depth originales.
+    const g = boundingBox.geometry;
+    if (g.parameters) {
+      return {
+        x: g.parameters.width / 2,
+        y: g.parameters.height / 2,
+        z: g.parameters.depth / 2,
+      };
+    }
+    // Fallback al boundingBox geometrico.
+    g.computeBoundingBox();
+    const bb = g.boundingBox;
+    return {
+      x: (bb.max.x - bb.min.x) / 2,
+      y: (bb.max.y - bb.min.y) / 2,
+      z: (bb.max.z - bb.min.z) / 2,
+    };
+  }
 }
 
-colisionesLateral(bloques, vector, velocidad, personaje, boundingBox) {
-    for (let i = 0; i < bloques.length; i++) {
-            let bV = new THREE.Vector2(bloques[i].x, bloques[i].z);
-            let eV = new THREE.Vector2(personaje.position.x, personaje.position.z);
-
-            if (bV.distanceTo(eV) <= 0.8 && Math.abs((personaje.position.x) - (bloques[i].x)) >= 0 && Math.abs((personaje.position.z) - (bloques[i].z)) >= 0) {
-                //if (this.position.y - (bloques[i][j].y - 0.5)== 0 || this.position.y - (bloques[i][j].y - 0.5)== -1){
-                this.bloqueRaro.position.set(bloques[i].x, bloques[i].y, bloques[i].z);
-                if (this.detectCollisionCharacterWorld(this.bloqueRaro, boundingBox) && Math.abs(boundingBox.position.y - bloques[i].y) <= 0.5) {
-                    let choqueX = boundingBox.position.x - bloques[i].x;
-                    let choqueZ = boundingBox.position.z - bloques[i].z;
-
-                    if (Math.abs(choqueX) > Math.abs(choqueZ)) {
-                        let valor = 0.8
-                        if (choqueX > -valor && (choqueX >= valor || choqueX <= 0)) {
-                            valor = -valor;
-                        }
-                        personaje.position.x = bloques[i].x + valor;
-                        boundingBox.position.x = bloques[i].x + valor;
-                    }
-                    else {
-                        let valor = 0.8
-                        if (choqueZ > -valor && (choqueZ >= valor || choqueZ <= 0)) {
-                            valor = -valor;
-                        }
-                        personaje.position.z = bloques[i].z + valor;
-                        boundingBox.position.z = bloques[i].z + valor;
-                    }
-
-                    // No aplicamos translateOnAxis al reves. El snap anterior
-                    // ya saca al personaje del bloque; al moverlo ademas hacia
-                    // atras se producia jitter: cada frame el input lo empujaba
-                    // al bloque, el snap lo movia fuera, el translate lo movia
-                    // mas atras todavia → temblor visible al chocar y seguir
-                    // andando.
-                }
-            }
-        }
-    }
-
-
-    detectCollisionCharacterWorld(box, boundingBox) {
-        boundingBox.geometry.computeBoundingBox();
-        box.geometry.computeBoundingBox();
-        boundingBox.updateMatrixWorld();
-        box.updateMatrixWorld();
-
-        const a = boundingBox.geometry.boundingBox.clone().applyMatrix4(boundingBox.matrixWorld);
-        const b = box.geometry.boundingBox.clone().applyMatrix4(box.matrixWorld);
-
-        return aabbIntersect(box3ToAABB(a), box3ToAABB(b));
-    }
-
-    update(bloques, personaje, boundingBox, teclasPulsadas, vectorDir, velocidad) {
-        let delta = this.clock.getDelta();
-
-        if (personaje.puedeSaltar && teclasPulsadas != null && teclasPulsadas[" "]) {
-            this.caidaVel = 10;
-            personaje.puedeSaltar = false;
-        }
-
-        //console.log(personaje.position);
-        personaje.position.y += this.caidaVel * delta;
-        boundingBox.position.y += this.caidaVel * delta;
-        this.caidaVel += this.caidaAcc * delta;
-
-        if (!this.autojump)
-            this.colisionesLateral(bloques, vectorDir, velocidad, personaje, boundingBox);
-
-
-        this.colisionesSuelo(bloques, personaje, boundingBox);
-    }
-}
-
-export { Colisiones }
+export { Colisiones };

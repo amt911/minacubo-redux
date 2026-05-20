@@ -349,13 +349,16 @@ class Esteban extends THREE.Object3D {
 
     let velocidadFinal=(teclasPulsadas["SHIFT"])? velocidad*2 : velocidad;
 
-    this.translateOnAxis(vectorDir.normalize(), velocidadFinal);
-
-    this.boundingBox.translateOnAxis(vectorDir, velocidadFinal);
-    
     if(moviendose)
       this.animacion(esForward, velocidadFinal);
-    
+
+    // Antes Esteban aplicaba translateOnAxis(vectorDir, velocidadFinal) sobre
+    // personaje y boundingBox ANTES de chequear colisiones, y luego
+    // Colisiones.colisionesLateral parcheaba el resultado con un snap+
+    // translateOnAxis inverso que producia jitter. Ahora Colisiones.update
+    // recibe vectorDir + velocidad y aplica el movimiento entero pasando
+    // por el voxelPhysics axis-separated sweep — un solo punto de verdad
+    // para fisica + colision.
     this.colisiones.update(bloques, this, this.boundingBox, teclasPulsadas, vectorDir, velocidad);
   }
 }
