@@ -733,6 +733,7 @@ this.puntoscerdos = [];
 
       const index = hit.face.materialIndex;
       const posicion = hit.point;
+      let coord = { x: 0, y: 0, z: 0 };
       switch (index) {
         case 0: //derecha (x pos)
           coord = { x: posicion.x - 0.5, y: (posicion.y | 0) + 0.5, z: Math.round(posicion.z) };
