@@ -292,6 +292,12 @@ this.puntoscerdos = [];
       }
     }
 
+    this.mesh["Hierba"].count = k;
+    this.mesh["Tierra"].count = contador;
+    this.mesh["Piedra"].count = contador2;
+    this.mesh["HojasRoble"].count = contador3;
+    this.mesh["MaderaRoble"].count = contador4;
+
     for (let aux in this.mesh) {
       this.aplicarSombrasInstancedMesh(this.mesh[aux]);
       this.add(this.mesh[aux]);
@@ -466,7 +472,7 @@ this.puntoscerdos = [];
     this._sunOffset = new THREE.Vector3(60, 50, 20);
     this.sunLight.position.copy(this._sunOffset);
     this.sunLight.castShadow = true;
-    this.sunLight.shadow.mapSize.set(2048, 2048);
+    this.sunLight.shadow.mapSize.set(1024, 1024);
 
     // Frustum ortografico generoso para que las sombras alargadas (ahora
     // hasta ~2 bloques de longitud por cubo) no queden cortadas en el
@@ -913,12 +919,17 @@ this.puntoscerdos = [];
     this.cameraControl.update();
 
     // Springarm: si hay terreno entre la cabeza y la camara, acercarla.
+    // Throttled a cada 3 frames — la camara no cambia radicalmente en 1 frame.
     const postOffset = this.camera.position.clone().sub(head);
     const postDist = postOffset.length();
     const postDir = postDist > 0 ? postOffset.clone().divideScalar(postDist) : prevDir;
-    const safeDist = this._clampCamDist(head, postDir, this._cameraDesiredDist);
-    if (safeDist < postDist) {
-      this.camera.position.copy(head).addScaledVector(postDir, safeDist);
+    if (!this._springArmFrame) this._springArmFrame = 0;
+    this._springArmFrame++;
+    if (this._springArmFrame % 3 === 0 || this._springArmCachedDist === undefined) {
+      this._springArmCachedDist = this._clampCamDist(head, postDir, this._cameraDesiredDist);
+    }
+    if (this._springArmCachedDist < postDist) {
+      this.camera.position.copy(head).addScaledVector(postDir, this._springArmCachedDist);
     }
 
     // Le decimos al renderizador "visualiza la escena que te indico usando la cámara que te estoy pasando"
@@ -975,7 +986,6 @@ this.puntoscerdos = [];
       };
 
       let matrix = new THREE.Matrix4();
-      let contador=0, contador2=0, contador3=0, contador4=0;
 
       for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
         for (let i = this.chunkMinMax.min.x; i <= this.chunkMinMax.max.x; i++) {
@@ -992,7 +1002,7 @@ this.puntoscerdos = [];
             //Genera el chunk que no existia
             var n_arboles = Math.floor(Math.random() * this.TAM_CHUNK/5);
             var list_arboles = [];
-    
+
             for (let m = 0; m < n_arboles; m++) {
               let posx =  Math.floor(Math.random()* this.TAM_CHUNK);
               let posz = Math.floor(Math.random() * this.TAM_CHUNK);
@@ -1022,39 +1032,34 @@ this.puntoscerdos = [];
                 }
                 for (let s = 0; s < 3; s++) {
                   matrix.setPosition(z * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR - s - 1, x * 16 / PM.PIXELES_ESTANDAR);
-                  this.mesh["Tierra"].setMatrixAt(contador, matrix);
-    
-    
+                  this.mesh["Tierra"].setMatrixAt(l["Tierra"], matrix);
                   bloques.push({ x: z * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR - s - 1, z: x * 16 / PM.PIXELES_ESTANDAR, material: "Tierra" });
-                  contador++;
-                  
+                  l["Tierra"]++;
                 }
 
                 for (let r = 3; r < 8; r++) {
                   matrix.setPosition(z * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR - r - 1, x * 16 / PM.PIXELES_ESTANDAR);
-                  this.mesh["Piedra"].setMatrixAt(contador2, matrix);
-    
-    
+                  this.mesh["Piedra"].setMatrixAt(l["Piedra"], matrix);
                   bloques.push({ x: z * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR - r - 1, z: x * 16 / PM.PIXELES_ESTANDAR, material: "Piedra" });
-                  contador2++;
+                  l["Piedra"]++;
                 }
               }
             }
             for (let indice_arbol = 0; indice_arbol < list_arboles.length; indice_arbol++) {
               let arbol = new estructuras.ArbolRoble();
-    
+
               for (let r = 0; r < arbol.bloqueshojas.length; r++) {
                 matrix.setPosition(list_arboles[indice_arbol].x + arbol.bloqueshojas[r].x, list_arboles[indice_arbol].y + arbol.bloqueshojas[r].y - 0.5, list_arboles[indice_arbol].z + arbol.bloqueshojas[r].z);
-                this.mesh["HojasRoble"].setMatrixAt(contador3, matrix);
+                this.mesh["HojasRoble"].setMatrixAt(l["HojasRoble"], matrix);
                 bloques.push({ x: list_arboles[indice_arbol].x + arbol.bloqueshojas[r].x, y: list_arboles[indice_arbol].y + arbol.bloqueshojas[r].y -0.5, z: list_arboles[indice_arbol].z  + arbol.bloqueshojas[r].z, material: "HojasRoble" });
-                contador3++;
+                l["HojasRoble"]++;
               }
-    
+
               for (let r = 0; r < arbol.bloquesmadera.length; r++) {
                 matrix.setPosition(list_arboles[indice_arbol].x + arbol.bloquesmadera[r].x, list_arboles[indice_arbol].y + arbol.bloquesmadera[r].y -0.5, list_arboles[indice_arbol].z + arbol.bloquesmadera[r].z);
-                this.mesh["MaderaRoble"].setMatrixAt(contador4, matrix);
+                this.mesh["MaderaRoble"].setMatrixAt(l["MaderaRoble"], matrix);
                 bloques.push({ x: list_arboles[indice_arbol].x + arbol.bloquesmadera[r].x, y: list_arboles[indice_arbol].y + arbol.bloquesmadera[r].y -0.5, z: list_arboles[indice_arbol].z + arbol.bloquesmadera[r].z, material: "MaderaRoble" });
-                contador4++;
+                l["MaderaRoble"]++;
               }
             }
             this.chunkCollision.push(bloques);
@@ -1070,7 +1075,9 @@ this.puntoscerdos = [];
       }
 
       for (let tipo in this.mesh) {
-        this.add(this.mesh[tipo])
+        if (l[tipo] !== undefined) this.mesh[tipo].count = l[tipo];
+        this.mesh[tipo].instanceMatrix.needsUpdate = true;
+        this.add(this.mesh[tipo]);
       }
 
     }
