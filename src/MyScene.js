@@ -71,6 +71,13 @@ class MyScene extends THREE.Scene {
 
     this.initStats();
 
+    // Constantes del mundo. Se asignan ANTES de createLights() porque
+    // shadowExtent depende de TAM_CHUNK * DISTANCIA_RENDER. Si createLights
+    // se llamaba antes, esos valores eran undefined → frustum NaN → shadow
+    // map roto silenciosamente.
+    this.TAM_CHUNK = 12;
+    this.DISTANCIA_RENDER = 7;
+
     // Construimos los distinos elementos que tendremos en la escena
 
     // Todo elemento que se desee sea tenido en cuenta en el renderizado de la escena debe pertenecer a esta. Bien como hijo de la escena (this en esta clase) o como hijo de un elemento que ya esté en la escena.
@@ -100,11 +107,6 @@ class MyScene extends THREE.Scene {
 
     this.chunkCollision = [];   //Almacena chunks
     this.chunk = [];
-
-    this.TAM_CHUNK = 12;
-    this.DISTANCIA_RENDER = 7;
-    //this.TAM_CHUNK = 2;
-    //this.DISTANCIA_RENDER = 5;    
     this.h = new cubos.Hierba();
     let matrix = new THREE.Matrix4();
     this.noise = createTerrainNoise();
@@ -457,18 +459,6 @@ this.puntoscerdos = [];
 
     this.add(this.sunLight);
     this.add(this.sunLight.target);
-
-    // DEBUG: helper que dibuja el frustum del shadow camera. Si las sombras
-    // no aparecen, comprobar que las lineas del helper engloban el area
-    // donde caminas. Si el helper se ve lejos o pequeno, el frustum no
-    // cubre la escena → ajustar shadowExtent o updateSunPosition.
-    this._shadowHelper = new THREE.CameraHelper(this.sunLight.shadow.camera);
-    this.add(this._shadowHelper);
-
-    console.log('[lights] shadowMap.enabled=', this.renderer.shadowMap.enabled);
-    console.log('[lights] sunLight.castShadow=', this.sunLight.castShadow);
-    console.log('[lights] shadow.mapSize=', this.sunLight.shadow.mapSize);
-    console.log('[lights] shadow.camera ortho=', cam.left, cam.right, cam.top, cam.bottom, cam.near, cam.far);
   }
 
   // Recorre un Object3D arbitrario y activa cast + receive shadow en
