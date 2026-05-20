@@ -18,6 +18,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --passWithNoTests",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -25,12 +26,14 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/three": "^0.184.1",
     "@vitest/coverage-v8": "^4.1.6",
     "eslint": "^10.4.0",
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.8.3",
     "serve": "^14.2.6",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.6"
   },
   "dependencies": {

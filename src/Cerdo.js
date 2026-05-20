@@ -259,14 +259,6 @@ class Cerdo extends THREE.Object3D {
     folder.add (this.guiControls, 'reset').name ('[ Reset ]');
   }
 
-  resetPosicion(){
-    this.pataLW1.rotation.x=0;
-    this.pataRW1.rotation.x=0;
-    this.brazoLeft.rotation.x=0;
-    this.brazoRight.rotation.x=0;
-    this.wrapperFinal.rotation.y=0;
-  }
-
   animacion(esForward, velocidad){
     const velFinal=(esForward)? velocidad : -velocidad;
 

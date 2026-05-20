@@ -31,6 +31,7 @@ function consolidateBoxGroups(geo, faceGroups) {
 class Cubo {
   constructor() {
     this.geometria = new THREE.BoxGeometry(16/PM.PIXELES_ESTANDAR, 16/PM.PIXELES_ESTANDAR, 16/PM.PIXELES_ESTANDAR);
+    /** @type {THREE.Material | THREE.Material[]} */
     this.material = new THREE.MeshPhongMaterial({color: 0xCF0000});
   }
 }

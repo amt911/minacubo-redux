@@ -325,9 +325,10 @@ class MyScene extends THREE.Scene {
 
     this.add(this.cajaSeleccionada);
 
-    this.cajaSeleccionada.material.wireframe = true;
-    this.cajaSeleccionada.material.wireframeLinewidth = 3;
-    this.cajaSeleccionada.material.color.set(0x333333);
+    const cajaMat = /** @type {THREE.MeshBasicMaterial} */ (this.cajaSeleccionada.material);
+    cajaMat.wireframe = true;
+    cajaMat.wireframeLinewidth = 3;
+    cajaMat.color.set(0x333333);
     this.cajaSeleccionada.visible = false;
 
     //Creacion del fog, el cielo y su animacion
@@ -337,6 +338,7 @@ class MyScene extends THREE.Scene {
     this.dayNightCycle = new DayNightCycle(this, this.fog, this.spotLight, this.sunLight);
   }
 
+  /** @returns {{x: number, z: number}} */
   identificarChunk(x, z) {
     return identificarChunk(x, z, this.TAM_CHUNK);
   }
@@ -1111,8 +1113,8 @@ class MyScene extends THREE.Scene {
     const zombieChunk = this.identificarChunk(this.zombie.position.x, this.zombie.position.z);
 
     let zombieColisiones=[];
-    for(let i=(zombieChunk.x-this.DISTANCIA_RENDER/2)|0; i<=(zombieChunk.x+this.DISTANCIA_RENDER/2)|0; i++){
-      for(let j=(zombieChunk.z-this.DISTANCIA_RENDER/2)|0; j<=(zombieChunk.z+this.DISTANCIA_RENDER/2)|0; j++){
+    for(let i=Math.floor(zombieChunk.x-this.DISTANCIA_RENDER/2); i<=Math.floor(zombieChunk.x+this.DISTANCIA_RENDER/2); i++){
+      for(let j=Math.floor(zombieChunk.z-this.DISTANCIA_RENDER/2); j<=Math.floor(zombieChunk.z+this.DISTANCIA_RENDER/2); j++){
         if(this.chunk[i]!== undefined && this.chunk[i][j]!== undefined){
           zombieColisiones = zombieColisiones.concat(this.chunk[i][j]);
         }
@@ -1140,8 +1142,8 @@ class MyScene extends THREE.Scene {
           const cerdoChunk= this.identificarChunk(this.cerdo.position.x, this.cerdo.position.z);
 
           let cerdoColisiones=[];
-          for(let i=(cerdoChunk.x-this.DISTANCIA_RENDER/2)|0; i<=(cerdoChunk.x+this.DISTANCIA_RENDER/2)|0; i++){
-            for(let j=(cerdoChunk.z-this.DISTANCIA_RENDER/2)|0; j<=(cerdoChunk.z+this.DISTANCIA_RENDER/2)|0; j++){
+          for(let i=Math.floor(cerdoChunk.x-this.DISTANCIA_RENDER/2); i<=Math.floor(cerdoChunk.x+this.DISTANCIA_RENDER/2); i++){
+            for(let j=Math.floor(cerdoChunk.z-this.DISTANCIA_RENDER/2); j<=Math.floor(cerdoChunk.z+this.DISTANCIA_RENDER/2); j++){
               if(this.chunk[i]!== undefined && this.chunk[i][j]!== undefined){
                 cerdoColisiones = cerdoColisiones.concat(this.chunk[i][j]);
               }
@@ -1162,7 +1164,7 @@ class MyScene extends THREE.Scene {
   }
 
   onDocumentWheel(event) {
-    const tiles = document.getElementsByClassName("tile");
+    const tiles = /** @type {HTMLCollectionOf<HTMLElement>} */ (document.getElementsByClassName("tile"));
 
     tiles[this.objeto].style.border = "";
 
