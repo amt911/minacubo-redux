@@ -30,10 +30,21 @@ describe('generarArbolRoble', () => {
     ]);
   });
 
-  it('corona tiene 8*altura - 7 hojas (formula derivada)', () => {
-    expect(generarArbolRoble(4).bloqueshojas).toHaveLength(8 * 4 - 7);
-    expect(generarArbolRoble(5).bloqueshojas).toHaveLength(8 * 5 - 7);
-    expect(generarArbolRoble(6).bloqueshojas).toHaveLength(8 * 6 - 7);
+  it('corona tiene 8*altura - 15 hojas (formula derivada, k arranca en 3)', () => {
+    expect(generarArbolRoble(4).bloqueshojas).toHaveLength(8 * 4 - 15);
+    expect(generarArbolRoble(5).bloqueshojas).toHaveLength(8 * 5 - 15);
+    expect(generarArbolRoble(6).bloqueshojas).toHaveLength(8 * 6 - 15);
+  });
+
+  it('hoja mas baja a y >= yBase+3 (el personaje pasa por debajo)', () => {
+    // El personaje mide 2 bloques (head y=2.5 sobre suelo con top y=0.5).
+    // Para pasar por debajo, leaf.bottom (y - 0.5) debe ser >= head =>
+    // y >= 3.0. Aqui validamos lo mas estricto: y >= yBase + 3 = 3.5.
+    for (const altura of [4, 5, 6]) {
+      const tree = generarArbolRoble(altura);
+      const yMin = Math.min(...tree.bloqueshojas.map((b) => b.y));
+      expect(yMin).toBeGreaterThanOrEqual(Y_BASE + 3);
+    }
   });
 
   it('corona es radio 1 en x y z (rango [-1, 1])', () => {

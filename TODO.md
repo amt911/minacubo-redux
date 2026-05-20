@@ -36,6 +36,7 @@ Roadmap para robustez (Docker, tests, TDD) y mejoras de juego.
 - [x] Hacer el feedback muchísimo más eficiente para que esté siempre activo y no consuma tantos recursos.
 - [x] Mejorar la distribución de los archivos, ahora mismo están todos al tuntún.
 - [ ] Mejorar controles juego, ahora mismo para mover la cámara se hace con la rueda del ratón pulsándola y no se puede hacer nada más. Asimismo, si se mueve la cámara hace clip por debajo del terreno.
+- [ ] Cambiar y usar TypeScript 
 
 ## Fase 3 — Refactor god class
 
