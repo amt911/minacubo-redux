@@ -16,6 +16,7 @@ import * as cubos from './Cubo.js'
 import * as estructuras from './estructuras.js'
 
 import * as PM from './ParametrosMundo.js'
+import { identificarChunk } from './chunkMath.js'
 
 /// La clase fachada del modelo
 /**
@@ -349,12 +350,7 @@ this.puntoscerdos = [];
   }
 
   identificarChunk(x, z) {
-    let res = {
-      x: Math.round((x - (x % this.TAM_CHUNK)) / this.TAM_CHUNK),
-      z: Math.round((z - (z % this.TAM_CHUNK)) / this.TAM_CHUNK)
-    }
-
-    return res;
+    return identificarChunk(x, z, this.TAM_CHUNK);
   }
 
 
