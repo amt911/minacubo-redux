@@ -1,6 +1,12 @@
 // @ts-check
 import * as THREE from 'three'
 import * as PM from './ParametrosMundo.js'
+import { aabbIntersect } from './aabb.js'
+
+const box3ToAABB = (b) => ({
+  min: { x: b.min.x, y: b.min.y, z: b.min.z },
+  max: { x: b.max.x, y: b.max.y, z: b.max.z },
+});
 
 class Colisiones {
     constructor(autojump, mitad) {
@@ -85,13 +91,10 @@ colisionesLateral(bloques, vector, velocidad, personaje, boundingBox) {
         boundingBox.updateMatrixWorld();
         box.updateMatrixWorld();
 
-        let a = boundingBox.geometry.boundingBox.clone();
-        a.applyMatrix4(boundingBox.matrixWorld);
+        const a = boundingBox.geometry.boundingBox.clone().applyMatrix4(boundingBox.matrixWorld);
+        const b = box.geometry.boundingBox.clone().applyMatrix4(box.matrixWorld);
 
-        let b = box.geometry.boundingBox.clone();
-        b.applyMatrix4(box.matrixWorld);
-
-        return a.intersectsBox(b);
+        return aabbIntersect(box3ToAABB(a), box3ToAABB(b));
     }
 
     update(bloques, personaje, boundingBox, teclasPulsadas, vectorDir, velocidad) {
