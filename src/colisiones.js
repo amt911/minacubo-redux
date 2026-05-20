@@ -28,16 +28,17 @@ class Colisiones {
     }
 
 colisionesSuelo(bloques, personaje, boundingBox) {
-    // Solo bloques POR DEBAJO de los pies cuentan como suelo. Sin este
-    // filtro, las hojas de un arbol justo arriba podian intersectar el
-    // boundingBox al saltar y "snapeaban" al personaje a la copa.
-    const playerFeetY = personaje.position.y - personaje.altura / PM.PIXELES_ESTANDAR / 2;
+    // Solo bloques cuyo TOP queda al nivel de la cabeza o por debajo
+    // cuentan como suelo. Las hojas/techos quedan estrictamente por
+    // encima → no actuan como suelo (no mas saltos a la copa del arbol).
+    // Para overshoot por gravedad la cabeza siempre va ~2u por delante
+    // de los pies (altura/PM = 32/16 = 2), asi que esto no rompe el
+    // landing en caso de delta grande por frame.
+    const headHalf = personaje.altura / PM.PIXELES_ESTANDAR / 2;
+    const playerHeadY = personaje.position.y + headHalf;
 
     for (let i = 0; i < bloques.length; i++) {
-            const blockTop = bloques[i].y + 0.5;
-            // Tolerancia 0.6: permite escalar un bloque normal pero no saltar
-            // ~2 bloques de altura como atajo.
-            if (blockTop > playerFeetY + 0.6) continue;
+            if (bloques[i].y + 0.5 > playerHeadY) continue;
 
             let bV = new THREE.Vector2(bloques[i].x, bloques[i].z);
             let eV = new THREE.Vector2(personaje.position.x, personaje.position.z);
