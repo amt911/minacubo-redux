@@ -347,8 +347,8 @@ this.puntoscerdos = [];
 
       this.background=new THREE.Color(rgbInicial.r,rgbInicial.g,rgbInicial.b);
 
-      this.spotLight.intensity=rgbInicial.intensidad * 0.6;
-      this.sunLight.intensity=rgbInicial.intensidad * 0.9;
+      this.spotLight.intensity=rgbInicial.intensidad * 0.3;
+      this.sunLight.intensity=rgbInicial.intensidad * 1.6;
 
     }).yoyo(true).repeat(Infinity).start();
   }
@@ -416,15 +416,16 @@ this.puntoscerdos = [];
   }
 
   createLights() {
-    // Ambient: relleno bajo para dejar margen al contraste sun/sombra. Aun
-    // asi sostiene visibilidad cuando hemi+sun se acercan a cero por el
-    // ciclo dia/noche.
-    let ambientLight = new THREE.AmbientLight(0xb0c4de, 0.25);
+    // Ambient muy bajo: con ambient alto las caras en sombra reciben tanta
+    // luz que el contraste con las iluminadas por el sol es invisible. 0.1
+    // garantiza que la noche no sea negra puro, sin matar el contraste.
+    let ambientLight = new THREE.AmbientLight(0xb0c4de, 0.1);
     this.add(ambientLight);
 
     // Hemisphere: cielo azul arriba, suelo calido marron abajo. Tinte
-    // segun normal del bloque, complementa al sol direccional.
-    this.spotLight = new THREE.HemisphereLight(0x87CEEB, 0x4a3520, 0.45);
+    // segun normal del bloque, contribucion baja para no compensar las
+    // sombras del sol.
+    this.spotLight = new THREE.HemisphereLight(0x87CEEB, 0x4a3520, 0.3);
     this.spotLight.position.set(0, 60, 0);
     this.add(this.spotLight);
 
@@ -432,7 +433,7 @@ this.puntoscerdos = [];
     // duras de los cubos sobre el terreno. Sigue al jugador (ver
     // updateSunPosition) para que el frustum ortografico nunca pierda la
     // escena visible. Sin esto las sombras desaparecen al alejarse.
-    this.sunLight = new THREE.DirectionalLight(0xfff4d6, 1.1);
+    this.sunLight = new THREE.DirectionalLight(0xfff4d6, 1.6);
     // Offset bajo y lateral: angulo ~35° desde horizontal → sombras LARGAS
     // y bien visibles. Posicion (90,0) vertical 60° con sun alto producia
     // sombras minusculas (longitud ~0.5 bloques).
@@ -474,8 +475,8 @@ this.puntoscerdos = [];
   }
 
   setLightIntensity(valor) {
-    this.spotLight.intensity = valor * 0.6;
-    this.sunLight.intensity = valor * 0.9;
+    this.spotLight.intensity = valor * 0.3;
+    this.sunLight.intensity = valor * 1.6;
   }
 
   setAxisVisible(valor) {
