@@ -108,18 +108,11 @@ class MyScene extends THREE.Scene {
 
     this.chunkCollision = [];   //Almacena chunks
     this.chunk = [];
-    this.h = new cubos.Hierba();
     let matrix = new THREE.Matrix4();
     this.noise = createTerrainNoise();
 
-
     //this.puntoscerdos = [[]];
-this.puntoscerdos = [];
-    
-
-
-    this.p = new cubos.Piedra();
-    this.t = new cubos.Tierra();
+    this.puntoscerdos = [];
 
     this.model.position.x = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2
     this.model.position.z = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2
@@ -138,16 +131,24 @@ this.puntoscerdos = [];
       "PiedraLuminosa",
       "HojasRoble"];
 
-    this.materialesText = {
-      "Hierba": new cubos.Hierba().material,
-      "Tierra": new cubos.Tierra().material,
-      "Roca": new cubos.Roca().material,
-      "Piedra": new cubos.Piedra().material,
-      "MaderaRoble": new cubos.MaderaRoble().material,
-      "PiedraBase": new cubos.PiedraBase().material,
-      "Cristal": new cubos.Cristal().material,
-      "PiedraLuminosa": new cubos.PiedraLuminosa().material,
-      "HojasRoble": new cubos.HojaRoble().material
+    // Build per-type geometry + material maps so each InstancedMesh uses
+    // the geometry that matches its consolidated groups.
+    const _bloqueInstancias = {
+      "Hierba":        new cubos.Hierba(),
+      "Tierra":        new cubos.Tierra(),
+      "Roca":          new cubos.Roca(),
+      "Piedra":        new cubos.Piedra(),
+      "MaderaRoble":   new cubos.MaderaRoble(),
+      "PiedraBase":    new cubos.PiedraBase(),
+      "Cristal":       new cubos.Cristal(),
+      "PiedraLuminosa":new cubos.PiedraLuminosa(),
+      "HojasRoble":    new cubos.HojaRoble(),
+    };
+    this.materialesText = {};
+    this.geometriaText = {};
+    for (const [tipo, inst] of Object.entries(_bloqueInstancias)) {
+      this.materialesText[tipo] = inst.material;
+      this.geometriaText[tipo]  = inst.geometria;
     }
 
     this.sizeIMesh = {
@@ -162,16 +163,13 @@ this.puntoscerdos = [];
       "HojasRoble": 1 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER
     }
 
-    this.mesh = {
-      "Hierba": new THREE.InstancedMesh(this.h.geometria, this.materialesText["Hierba"], this.sizeIMesh["Hierba"]),
-      "Tierra": new THREE.InstancedMesh(this.t.geometria, this.materialesText["Tierra"], this.sizeIMesh["Tierra"]),
-      "Roca": new THREE.InstancedMesh(this.p.geometria, this.materialesText["Roca"], this.sizeIMesh["Roca"]),
-      "Piedra": new THREE.InstancedMesh(this.p.geometria, this.materialesText["Piedra"], this.sizeIMesh["Piedra"]),
-      "MaderaRoble": new THREE.InstancedMesh(this.h.geometria, this.materialesText["MaderaRoble"], this.sizeIMesh["MaderaRoble"]),
-      "PiedraBase": new THREE.InstancedMesh(this.p.geometria, this.materialesText["PiedraBase"], this.sizeIMesh["PiedraBase"]),
-      "Cristal": new THREE.InstancedMesh(this.p.geometria, this.materialesText["Cristal"], this.sizeIMesh["Cristal"]),
-      "PiedraLuminosa": new THREE.InstancedMesh(this.p.geometria, this.materialesText["PiedraLuminosa"], this.sizeIMesh["PiedraLuminosa"]),
-      "HojasRoble": new THREE.InstancedMesh(this.h.geometria, this.materialesText["HojasRoble"], this.sizeIMesh["HojasRoble"])
+    this.mesh = {};
+    for (const tipo of this.bloqueSeleccionado) {
+      this.mesh[tipo] = new THREE.InstancedMesh(
+        this.geometriaText[tipo],
+        this.materialesText[tipo],
+        this.sizeIMesh[tipo]
+      );
     }
 
     let k = 0;
@@ -764,7 +762,7 @@ this.puntoscerdos = [];
         let matrix = new THREE.Matrix4();
 
         let l = 0;
-        this.mesh[objetosIntersecados[0].tipo] = new THREE.InstancedMesh(this.h.geometria, this.materialesText[objetosIntersecados[0].tipo], --this.sizeIMesh[objetosIntersecados[0].tipo]);
+        this.mesh[objetosIntersecados[0].tipo] = new THREE.InstancedMesh(this.geometriaText[objetosIntersecados[0].tipo], this.materialesText[objetosIntersecados[0].tipo], --this.sizeIMesh[objetosIntersecados[0].tipo]);
         this.aplicarSombrasInstancedMesh(this.mesh[objetosIntersecados[0].tipo]);
 
 
@@ -858,7 +856,7 @@ this.puntoscerdos = [];
       let l = 0;
 
       this.mesh[this.bloqueSeleccionado[this.objeto]] = new THREE.InstancedMesh(
-        this.h.geometria,
+        this.geometriaText[this.bloqueSeleccionado[this.objeto]],
         this.materialesText[this.bloqueSeleccionado[this.objeto]],
         ++this.sizeIMesh[this.bloqueSeleccionado[this.objeto]]
       );
@@ -1061,7 +1059,7 @@ this.puntoscerdos = [];
     if (renderChunksAgain) {
       for (let tipo in this.mesh) {
         this.remove(this.mesh[tipo]);
-        this.mesh[tipo] = new THREE.InstancedMesh(this.h.geometria, this.materialesText[tipo], this.sizeIMesh[tipo]);
+        this.mesh[tipo] = new THREE.InstancedMesh(this.geometriaText[tipo], this.materialesText[tipo], this.sizeIMesh[tipo]);
         this.aplicarSombrasInstancedMesh(this.mesh[tipo]);
       }
 
