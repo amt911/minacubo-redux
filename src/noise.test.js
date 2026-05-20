@@ -105,10 +105,13 @@ describe('terrainHeight', () => {
   });
 
   it('hay picos dramaticos ocasionales (mountains)', () => {
+    // Muestra un area amplia: mountains son sparse (threshold 0.5) y broad
+    // (freq 0.003 → wavelength ~333), asi que un grid pequeño puede caer
+    // entre picos. 600x600 es ~1.8 longitudes de onda en cada eje.
     const n = createTerrainNoise(2024);
     let max = -Infinity;
-    for (let x = 0; x < 200; x++) {
-      for (let z = 0; z < 200; z++) {
+    for (let x = 0; x < 600; x += 3) {
+      for (let z = 0; z < 600; z += 3) {
         max = Math.max(max, terrainHeight(n, x, z));
       }
     }
