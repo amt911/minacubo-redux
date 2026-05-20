@@ -74,6 +74,7 @@ src/                    Application code (+ co-located *.test.js)
   colisiones.js           Collision detection (uses aabb.js)
   aabb.js                 Pure AABB intersection
   chunkMath.js            Pure chunk math (identify, shift)
+  noise.js                Pure terrain noise (simplex + seeded Mulberry32 PRNG)
   ParametrosMundo.js      World constants
 texturas/               Block and GUI textures
 Dockerfile.dev/.prod    Docker images (dev node + prod nginx multi-stage)
@@ -82,7 +83,7 @@ makefile                Shortcuts (make up / down / prod / clean)
 scripts/                Helpers (reset-node-modules.sh)
 ```
 
-Runtime deps (`three`, `lil-gui`, `@tweenjs/tween.js`, `noisejs`) live in `node_modules/` via npm.
+Runtime deps (`three`, `lil-gui`, `@tweenjs/tween.js`, `simplex-noise`) live in `node_modules/` via npm.
 
 ## License
 

@@ -1,0 +1,30 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`createTerrainNoise > snapshot heightmap reproducible con seed fijo 1`] = `
+[
+  [
+    0,
+    -0.4,
+    -0.62,
+    -0.52,
+  ],
+  [
+    -0.4,
+    -0.74,
+    -0.88,
+    -0.77,
+  ],
+  [
+    -0.62,
+    -0.88,
+    -0.98,
+    -0.94,
+  ],
+  [
+    -0.56,
+    -0.78,
+    -0.94,
+    -1,
+  ],
+]
+`;

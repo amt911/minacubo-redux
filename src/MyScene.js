@@ -17,6 +17,7 @@ import * as estructuras from './estructuras.js'
 
 import * as PM from './ParametrosMundo.js'
 import { identificarChunk } from './chunkMath.js'
+import { createTerrainNoise } from './noise.js'
 
 /// La clase fachada del modelo
 /**
@@ -105,7 +106,7 @@ class MyScene extends THREE.Scene {
     //this.DISTANCIA_RENDER = 5;    
     this.h = new cubos.Hierba();
     let matrix = new THREE.Matrix4();
-    this.noise = new Noise(Math.random());
+    this.noise = createTerrainNoise();
     this.amplitud = 1 + (Math.random() * 45);
     let inc = 0.02;
     let xoff;
@@ -221,7 +222,7 @@ this.puntoscerdos = [];
             xoff = inc * x;
             zoff = inc * z;
 
-            let v = Math.round(this.noise.perlin2(xoff, zoff) * this.amplitud);
+            let v = Math.round(this.noise(xoff, zoff) * this.amplitud);
             if(i == 0 && j == 0){
               if(zombiex + i*this.TAM_CHUNK == x && zombiez + j*this.TAM_CHUNK == z){
                 zombiey = v;
@@ -890,7 +891,7 @@ this.puntoscerdos = [];
                 xoff = inc * z;
                 zoff = inc * x;
 
-                let v = Math.round(this.noise.perlin2(xoff, zoff) * this.amplitud);
+                let v = Math.round(this.noise(xoff, zoff) * this.amplitud);
                 matrix.setPosition(z * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR, x * 16 / PM.PIXELES_ESTANDAR);
                 this.mesh["Hierba"].setMatrixAt(l["Hierba"], matrix);
 

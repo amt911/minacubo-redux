@@ -36,7 +36,7 @@
   "dependencies": {
     "@tweenjs/tween.js": "^25.0.0",
     "lil-gui": "^0.21.0",
-    "noisejs": "^2.1.0",
+    "simplex-noise": "^4.0.3",
     "three": "^0.140.2"
   }
 }
