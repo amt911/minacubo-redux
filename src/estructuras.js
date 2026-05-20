@@ -21,17 +21,13 @@ export function generarArbolRoble(altura = Math.floor(Math.random() * 2) + 4) {
     bloquesmadera.push({ x: 0, y: yBase + i, z: 0 });
   }
 
-  // Copa ENTERAMENTE encima del tronco: las hojas arrancan en k=altura
-  // (una posicion por encima del bloque mas alto del tronco), tres capas
-  // de 3x3 = 27 hojas. Asi el personaje pasa por debajo del arbol
-  // incluso cuando el terreno proximo sube algunos bloques. Si las
-  // hojas estuvieran tambien rodeando el tronco (la version anterior),
-  // cualquier subida de terreno meteria al personaje contra ellas.
   const bloqueshojas = [];
   for (let i = -1; i <= 1; i++) {
     for (let j = -1; j <= 1; j++) {
-      for (let k = altura; k < altura + 3; k++) {
-        bloqueshojas.push({ x: i, y: yBase + k, z: j });
+      for (let k = 2; k < altura + 1; k++) {
+        if (i !== 0 || j !== 0 || k > altura - 1) {
+          bloqueshojas.push({ x: i, y: yBase + k, z: j });
+        }
       }
     }
   }

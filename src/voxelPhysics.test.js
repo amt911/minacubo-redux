@@ -128,6 +128,54 @@ describe('resolveMovement', () => {
     expect(r.onGround).toBe(true);
     expect(r.aabb.min.y).toBeCloseTo(0.5, 5);
   });
+
+  it('post-aterrizaje: pasa bajo techo tangente al andar (hueco 1x2)', () => {
+    // Escenario: suelo (top y=0.5), techo bottom exactamente a y=2.5 (=
+    // altura del personaje). Player aterriza primero (snap a y=0.5 exacto,
+    // sin EPS), luego anda en +X bajo techo tangente. Con EPS, aabb.max.y
+    // quedaba en 2.5+EPS y chocaba contra el techo al andar. Ahora pasa.
+    const start = player(0, 5, 0);
+    const blocks = [
+      block(0, 0, 0),   // suelo
+      block(1, 3, 0),   // techo a la derecha, bottom y=2.5
+    ];
+    const r1 = resolveMovement(start, { x: 0, y: -10, z: 0 }, blocks);
+    expect(r1.aabb.min.y).toBeCloseTo(0.5, 10);
+    expect(r1.aabb.max.y).toBeCloseTo(2.5, 10);
+    expect(r1.onGround).toBe(true);
+
+    const r2 = resolveMovement(r1.aabb, { x: 1, y: 0, z: 0 }, blocks);
+    expect(r2.hitWallX).toBe(false);
+    expect(r2.aabb.min.x).toBeCloseTo(r1.aabb.min.x + 1, 10);
+  });
+
+  it('salto bajo techo tangente bloquea (cabeza pega)', () => {
+    // Player ya en posicion de aterrizado (BB [0.5, 2.5]) bajo techo
+    // tangente. Saltar (dy>0) debe pegar la cabeza al techo y no subir.
+    const blocks = [
+      block(0, 0, 0),   // suelo
+      block(0, 3, 0),   // techo encima, bottom y=2.5 = head player
+    ];
+    const landed = player(0, 1.5, 0);
+    expect(landed.min.y).toBe(0.5);
+    expect(landed.max.y).toBe(2.5);
+
+    const r = resolveMovement(landed, { x: 0, y: 1, z: 0 }, blocks);
+    expect(r.hitCeiling).toBe(true);
+    expect(r.aabb.max.y).toBeCloseTo(2.5, 10);
+  });
+
+  it('onGround sigue true en frame idle sin movimiento (via ground probe)', () => {
+    // Sin probe, tras aterrizar a y=0.5 exacto, un frame con delta=0 no
+    // re-deteccion suelo (eje Y omitido). Probe debajo de los pies fija
+    // onGround independiente del movimiento del frame.
+    const start = player(0, 5, 0);
+    const blocks = [block(0, 0, 0)];
+    const r1 = resolveMovement(start, { x: 0, y: -10, z: 0 }, blocks);
+    expect(r1.onGround).toBe(true);
+    const r2 = resolveMovement(r1.aabb, { x: 0, y: 0, z: 0 }, blocks);
+    expect(r2.onGround).toBe(true);
+  });
 });
 
 describe('aabbFromCenterSize', () => {

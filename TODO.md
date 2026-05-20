@@ -37,6 +37,7 @@ Roadmap para robustez (Docker, tests, TDD) y mejoras de juego.
 - [x] Mejorar la distribución de los archivos, ahora mismo están todos al tuntún.
 - [ ] Mejorar controles juego, ahora mismo para mover la cámara se hace con la rueda del ratón pulsándola y no se puede hacer nada más. Asimismo, si se mueve la cámara hace clip por debajo del terreno.
 - [ ] Cambiar y usar TypeScript 
+- [ ] Mejorar cámara, quiero que cuando se mueva lo más abajo posible no clipee con el suelo, pero esto quiere decir que cuando haya algún suelo más abajo, debe bajar la cámara más, así como si hay montañas. En el caso de las montañas, lo suyo es acercar la cámara para no ver el interior de las mismas.
 
 ## Fase 3 — Refactor god class
 

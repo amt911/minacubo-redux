@@ -5,7 +5,12 @@
  * @typedef {{min: Vec3, max: Vec3}} AABB
  */
 
-const EPS = 1e-6;
+// Espesor de la "sonda" para detectar suelo justo debajo de los pies. No
+// es un EPS de snap: snap se hace a la cara exacta (sin offset) para que
+// un hueco de exactamente la altura del jugador deje pasar al andar y
+// bloquee al saltar. La sonda solo sirve para que `onGround` siga true
+// cuando el jugador descansa sobre un bloque sin movimiento en Y.
+const GROUND_PROBE = 1e-4;
 
 const cloneAABB = (a) => ({
   min: { x: a.min.x, y: a.min.y, z: a.min.z },
@@ -67,7 +72,6 @@ export function resolveMovement(currentAABB, delta, blocks) {
   const dy = delta.y / steps;
   const dz = delta.z / steps;
 
-  let onGround = false;
   let hitWallX = false;
   let hitWallZ = false;
   let hitCeiling = false;
@@ -79,10 +83,10 @@ export function resolveMovement(currentAABB, delta, blocks) {
       for (const b of blocks) {
         if (!aabbIntersectStrict(aabb, b)) continue;
         if (dx > 0) {
-          aabb.max.x = b.min.x - EPS;
+          aabb.max.x = b.min.x;
           aabb.min.x = aabb.max.x - sizeX;
         } else {
-          aabb.min.x = b.max.x + EPS;
+          aabb.min.x = b.max.x;
           aabb.max.x = aabb.min.x + sizeX;
         }
         hitWallX = true;
@@ -95,11 +99,10 @@ export function resolveMovement(currentAABB, delta, blocks) {
       for (const b of blocks) {
         if (!aabbIntersectStrict(aabb, b)) continue;
         if (dy < 0) {
-          aabb.min.y = b.max.y + EPS;
+          aabb.min.y = b.max.y;
           aabb.max.y = aabb.min.y + sizeY;
-          onGround = true;
         } else {
-          aabb.max.y = b.min.y - EPS;
+          aabb.max.y = b.min.y;
           aabb.min.y = aabb.max.y - sizeY;
           hitCeiling = true;
         }
@@ -112,14 +115,31 @@ export function resolveMovement(currentAABB, delta, blocks) {
       for (const b of blocks) {
         if (!aabbIntersectStrict(aabb, b)) continue;
         if (dz > 0) {
-          aabb.max.z = b.min.z - EPS;
+          aabb.max.z = b.min.z;
           aabb.min.z = aabb.max.z - sizeZ;
         } else {
-          aabb.min.z = b.max.z + EPS;
+          aabb.min.z = b.max.z;
           aabb.max.z = aabb.min.z + sizeZ;
         }
         hitWallZ = true;
       }
+    }
+  }
+
+  // Ground probe: sonda fina justo debajo de los pies. Sin esto, tras
+  // aterrizar en una cara exacta (sin EPS), strict intersect ya no detecta
+  // contacto con el suelo en frames idle (dy=0 → eje Y omitido). Probar un
+  // slab de GROUND_PROBE de alto separa la deteccion de suelo de la del
+  // resto de colisiones.
+  let onGround = false;
+  const probe = {
+    min: { x: aabb.min.x, y: aabb.min.y - GROUND_PROBE, z: aabb.min.z },
+    max: { x: aabb.max.x, y: aabb.min.y, z: aabb.max.z },
+  };
+  for (const b of blocks) {
+    if (aabbIntersectStrict(probe, b)) {
+      onGround = true;
+      break;
     }
   }
 

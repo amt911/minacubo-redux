@@ -30,23 +30,10 @@ describe('generarArbolRoble', () => {
     ]);
   });
 
-  it('corona tiene 27 hojas (3 capas 3x3 enteramente encima del tronco)', () => {
-    expect(generarArbolRoble(4).bloqueshojas).toHaveLength(27);
-    expect(generarArbolRoble(5).bloqueshojas).toHaveLength(27);
-    expect(generarArbolRoble(6).bloqueshojas).toHaveLength(27);
-  });
-
-  it('todas las hojas estan estrictamente encima del tronco', () => {
-    // El tronco ocupa k=0..altura-1, top y=yBase+(altura-1). La hoja mas
-    // baja debe estar a y=yBase+altura para que el personaje pase por
-    // debajo y la copa quede arriba (no rodeando el tronco).
-    for (const altura of [3, 4, 5, 6]) {
-      const tree = generarArbolRoble(altura);
-      const yMinHoja = Math.min(...tree.bloqueshojas.map((b) => b.y));
-      const yMaxTronco = Math.max(...tree.bloquesmadera.map((b) => b.y));
-      expect(yMinHoja).toBeGreaterThan(yMaxTronco);
-      expect(yMinHoja).toBe(Y_BASE + altura);
-    }
+  it('corona tiene 8*altura - 7 hojas (formula derivada)', () => {
+    expect(generarArbolRoble(4).bloqueshojas).toHaveLength(8 * 4 - 7);
+    expect(generarArbolRoble(5).bloqueshojas).toHaveLength(8 * 5 - 7);
+    expect(generarArbolRoble(6).bloqueshojas).toHaveLength(8 * 6 - 7);
   });
 
   it('corona es radio 1 en x y z (rango [-1, 1])', () => {
