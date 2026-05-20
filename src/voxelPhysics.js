@@ -1,5 +1,4 @@
 // @ts-check
-import { aabbIntersect } from './aabb.js';
 
 /**
  * @typedef {{x: number, y: number, z: number}} Vec3
@@ -17,6 +16,20 @@ const shiftAABB = (a, axis, amount) => {
   a.min[axis] += amount;
   a.max[axis] += amount;
 };
+
+/**
+ * Interseccion AABB-AABB ESTRICTA: caras coincidentes NO cuentan como
+ * colision. Diferente al `aabbIntersect` general de `aabb.js` (que cuenta
+ * tangencia como interseccion). Aqui necesitamos estricta para que el
+ * player pueda pasar por debajo de un techo cuya cara inferior esta
+ * exactamente al nivel de su cabeza — situacion comun en estructuras de
+ * 2 bloques de altura sobre suelo plano (e.g. hojas inferiores de arbol
+ * a y=2.5 cuando el player de 2 bloques tiene la cabeza en y=2).
+ */
+const aabbIntersectStrict = (a, b) =>
+  a.min.x < b.max.x && a.max.x > b.min.x &&
+  a.min.y < b.max.y && a.max.y > b.min.y &&
+  a.min.z < b.max.z && a.max.z > b.min.z;
 
 /**
  * Axis-separated AABB collision resolution against a list of solid block
@@ -64,7 +77,7 @@ export function resolveMovement(currentAABB, delta, blocks) {
     if (dx !== 0) {
       shiftAABB(aabb, 'x', dx);
       for (const b of blocks) {
-        if (!aabbIntersect(aabb, b)) continue;
+        if (!aabbIntersectStrict(aabb, b)) continue;
         if (dx > 0) {
           aabb.max.x = b.min.x - EPS;
           aabb.min.x = aabb.max.x - sizeX;
@@ -80,7 +93,7 @@ export function resolveMovement(currentAABB, delta, blocks) {
     if (dy !== 0) {
       shiftAABB(aabb, 'y', dy);
       for (const b of blocks) {
-        if (!aabbIntersect(aabb, b)) continue;
+        if (!aabbIntersectStrict(aabb, b)) continue;
         if (dy < 0) {
           aabb.min.y = b.max.y + EPS;
           aabb.max.y = aabb.min.y + sizeY;
@@ -97,7 +110,7 @@ export function resolveMovement(currentAABB, delta, blocks) {
     if (dz !== 0) {
       shiftAABB(aabb, 'z', dz);
       for (const b of blocks) {
-        if (!aabbIntersect(aabb, b)) continue;
+        if (!aabbIntersectStrict(aabb, b)) continue;
         if (dz > 0) {
           aabb.max.z = b.min.z - EPS;
           aabb.min.z = aabb.max.z - sizeZ;

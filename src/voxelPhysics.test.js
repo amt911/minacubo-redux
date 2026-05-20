@@ -109,6 +109,18 @@ describe('resolveMovement', () => {
     expect(r.aabb.min.y).toBeCloseTo(start.min.y - 10);
   });
 
+  it('camina bajo bloque cuyo bottom toca la cabeza: sin colision (tangencia exclusiva)', () => {
+    // Player altura 2 (centro y=1 → top y=2). Hoja a y=2.5 (bottom=2).
+    // Player camina en +X. La hoja queda exactamente "rozando" la cabeza.
+    // Con interseccion estricta NO debe contar como bloque, el player
+    // avanza libremente.
+    const start = player(0, 1, 0);
+    const blocks = [block(1, 2.5, 0)]; // hoja a la derecha, altura 2.5
+    const r = resolveMovement(start, { x: 1, y: 0, z: 0 }, blocks);
+    expect(r.hitWallX).toBe(false);
+    expect(r.aabb.min.x).toBeCloseTo(start.min.x + 1);
+  });
+
   it('cae sobre uno de varios bloques al mismo nivel', () => {
     const start = player(0, 5, 0);
     const blocks = [block(0, 0, 0), block(1, 0, 0), block(-1, 0, 0)];
