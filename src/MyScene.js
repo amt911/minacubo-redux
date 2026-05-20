@@ -390,7 +390,7 @@ this.puntoscerdos = [];
     this.guiControls = {
       // En el contexto de una función   this   alude a la función
       axisOnOff: true,
-      activarWireframe: false
+      activarWireframe: true
     }
 
     let folder = gui.addFolder('Ayudas');
@@ -401,21 +401,22 @@ this.puntoscerdos = [];
       .onChange((value) => this.setAxisVisible(value));
 
     folder.add(this.guiControls, 'activarWireframe')
-      .name('Mostrar feedback (mejora los FPS si se desactiva): ');
+      .name('Mostrar feedback (raycast a 10Hz)');
 
     return gui;
   }
 
   createLights() {
-    // Ambient: relleno minimo para que las caras en sombra no queden negras.
-    let ambientLight = new THREE.AmbientLight(0xb0c4de, 0.15);
+    // Ambient: relleno generoso. Garantiza que cuando hemi+sun se atenuan
+    // por el ciclo dia/noche el mapa sigue visible en lugar de quedar negro.
+    let ambientLight = new THREE.AmbientLight(0xb0c4de, 0.45);
     this.add(ambientLight);
 
     // Hemisphere: cielo azul arriba, suelo calido marron abajo. Da el
-    // "tinte natural" segun la orientacion de la cara del bloque.
+    // tinte natural segun la orientacion de la cara del bloque.
     // Conservamos el nombre `spotLight` para que el ciclo dia/noche siga
     // animando esta luz (intensity tweenada).
-    this.spotLight = new THREE.HemisphereLight(0x87CEEB, 0x4a3520, this.guiControls.lightIntensity * 0.6);
+    this.spotLight = new THREE.HemisphereLight(0x87CEEB, 0x4a3520, 0.6);
     this.spotLight.position.set(0, 60, 0);
     this.add(this.spotLight);
 
@@ -705,83 +706,64 @@ this.puntoscerdos = [];
   }
 
   actualizarFeedback() {
-    let mouse = new THREE.Vector2();
+    // Instancias reutilizadas entre frames — evitamos GC pressure: el
+    // raycast se llama a 10Hz minimo (throttled abajo) pero igualmente
+    // queremos cero allocations en hot path.
+    if (!this._feedbackRaycaster) {
+      this._feedbackRaycaster = new THREE.Raycaster();
+      this._feedbackMouse = new THREE.Vector2(0, 0); // centro de pantalla
+    }
+    const raycaster = this._feedbackRaycaster;
+    raycaster.setFromCamera(this._feedbackMouse, this.camera);
 
-    mouse.x = (0.5) * 2 - 1;
-    mouse.y = 1 - 2 * (0.5);
+    // Recogemos solo el hit mas cercano global, en vez de acumular todos
+    // y ordenar al final. Iteracion habitual: 9 meshes, antes alocaba
+    // array + sort cada frame.
+    let bestHit = null;
+    let bestCoord = null;
 
-    let raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, this.camera);
-    let objetosSeleccionados = [];
+    for (const aux in this.mesh) {
+      const mesh = this.mesh[aux];
+      if (mesh.count === 0) continue; // material sin instancias visibles
 
-    for (let aux in this.mesh) {
-      let objetos = raycaster.intersectObject(this.mesh[aux], true);
+      const objetos = raycaster.intersectObject(mesh, false);
+      const hit = objetos[0];
+      if (!hit || hit.distance > 20) continue;
+      if (bestHit && hit.distance >= bestHit.distance) continue;
 
-      if (objetos[0] != undefined && objetos.length > 0 && objetos[0].distance <= 20) {
-        let index = objetos[0].face.materialIndex;
-        let posicion = objetos[0].point;
-        let coord = { x: 0, y: 0, z: 0 };
-
-        switch (index) {
-          case 0: //derecha (x pos)
-            coord = {
-              x: posicion.x - 0.5,
-              y: (posicion.y | 0) + 0.5,
-              z: Math.round(posicion.z)
-            }
-            break;
-          case 1: //izquierda (x neg)
-            coord = {
-              x: posicion.x + 0.5,
-              y: (posicion.y | 0) + 0.5,
-              z: Math.round(posicion.z)
-            }
-            break;
-          case 2: //arriba (y pos) ok
-            coord = {
-              x: Math.round(posicion.x),
-              y: posicion.y - 0.5,
-              z: Math.round(posicion.z)
-            }
-            break;
-          case 3: //abajo (y neg)
-            coord = {
-              x: Math.round(posicion.x),
-              y: posicion.y + 0.5,
-              z: Math.round(posicion.z)
-            }
-            break;
-          case 4: //frente (z pos)
-            coord = {
-              x: Math.round(posicion.x),
-              y: (posicion.y | 0) + 0.5,
-              z: posicion.z - 0.5
-            }
-            break;
-          case 5: //detras (z neg)
-            coord = {
-              x: Math.round(posicion.x),
-              y: (posicion.y | 0) + 0.5,
-              z: posicion.z + 0.5
-            }
-            break;
-        }
-
-        if (posicion.y < 0 && index != 3 && index != 2) {
-          coord.y = Math.floor(posicion.y) + 0.5;
-        }
-
-        objetosSeleccionados.push({ objeto: objetos[0], coordenadas: coord });
+      const index = hit.face.materialIndex;
+      const posicion = hit.point;
+      switch (index) {
+        case 0: //derecha (x pos)
+          coord = { x: posicion.x - 0.5, y: (posicion.y | 0) + 0.5, z: Math.round(posicion.z) };
+          break;
+        case 1: //izquierda (x neg)
+          coord = { x: posicion.x + 0.5, y: (posicion.y | 0) + 0.5, z: Math.round(posicion.z) };
+          break;
+        case 2: //arriba (y pos)
+          coord = { x: Math.round(posicion.x), y: posicion.y - 0.5, z: Math.round(posicion.z) };
+          break;
+        case 3: //abajo (y neg)
+          coord = { x: Math.round(posicion.x), y: posicion.y + 0.5, z: Math.round(posicion.z) };
+          break;
+        case 4: //frente (z pos)
+          coord = { x: Math.round(posicion.x), y: (posicion.y | 0) + 0.5, z: posicion.z - 0.5 };
+          break;
+        case 5: //detras (z neg)
+          coord = { x: Math.round(posicion.x), y: (posicion.y | 0) + 0.5, z: posicion.z + 0.5 };
+          break;
       }
+
+      if (posicion.y < 0 && index !== 3 && index !== 2) {
+        coord.y = Math.floor(posicion.y) + 0.5;
+      }
+
+      bestHit = hit;
+      bestCoord = coord;
     }
 
-    //Ordena objetosSeleccionados por distancia
-    objetosSeleccionados.sort(function (a, b) {
-      return a.objeto.distance - b.objeto.distance;
-    });
-
-    if (objetosSeleccionados.length > 0) {
-      this.cajaSeleccionada.position.set(objetosSeleccionados[0].coordenadas.x, objetosSeleccionados[0].coordenadas.y, objetosSeleccionados[0].coordenadas.z);
+    if (bestCoord) {
+      this.cajaSeleccionada.position.set(bestCoord.x, bestCoord.y, bestCoord.z);
       this.cajaSeleccionada.visible = true;
     }
     else {
@@ -961,12 +943,18 @@ this.puntoscerdos = [];
     }
 
 
-    //Lanza Raycaster para poner el cubo wireframe en el lugar correcto
+    // Feedback throttled a ~10Hz: el raycaster contra cada InstancedMesh
+    // sigue siendo el coste mas alto del update. A 10Hz el highlight sigue
+    // sintiendose instantaneo y el ahorro de FPS es enorme (de 60 raycasts/s
+    // a 10/s).
     if (this.guiControls.activarWireframe) {
-      this.actualizarFeedback();
+      const now = performance.now();
+      if (!this._feedbackNext || now >= this._feedbackNext) {
+        this.actualizarFeedback();
+        this._feedbackNext = now + 100;
+      }
     }
     else {
-      //Se pone el cubo no visible
       this.cajaSeleccionada.visible = false;
     }
 

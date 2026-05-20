@@ -23,7 +23,7 @@ Roadmap para robustez (Docker, tests, TDD) y mejoras de juego.
 
 - [x] Usar npm para los paquetes, ahora mismo están copiados a lo cutre
 - [ ] Mejorar la lógica por completo de colisiones. Ahora mismo va muy mal (si se pone debajo de un árbol y se salta se sube automáticamente a la copa, si se colisiona contra un cubo y se sigue andando tiembla, etc)
-- [ ] Mejorar la iluminación, ahora mismo es plana.
+- [x] Mejorar la iluminación, ahora mismo es plana.
 - [x] Revisar el algoritmo de ruido perlin y usar mejor un paquete npm.
 - [x] Extraer AABB de `colisiones.js` a función pura testable
 - [x] Escribir `colisiones.test.js` (overlap total, tangente, eje único, sin overlap)
