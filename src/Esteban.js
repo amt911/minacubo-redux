@@ -46,9 +46,9 @@ class Esteban extends THREE.Object3D {
     ];
 
     //CABEZA
-    let geometriaCabeza = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
+    const geometriaCabeza = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
 
-    let cabeza = new THREE.Mesh(geometriaCabeza, texturaCabeza);
+    const cabeza = new THREE.Mesh(geometriaCabeza, texturaCabeza);
 
     cabeza.position.y = 4 / PM.PIXELES_ESTANDAR;
 
@@ -105,12 +105,12 @@ class Esteban extends THREE.Object3D {
 
     ];
 
-    let geometriaExtremidad = new THREE.BoxGeometry(4 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
-    let brazoL = new THREE.Mesh(geometriaExtremidad, texturabrazoL);
+    const geometriaExtremidad = new THREE.BoxGeometry(4 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
+    const brazoL = new THREE.Mesh(geometriaExtremidad, texturabrazoL);
 
     //brazo izquierdo
     brazoL.position.y = -4 / PM.PIXELES_ESTANDAR;
-    let brazoR = brazoL.clone();
+    const brazoR = brazoL.clone();
     brazoR.material = texturabrazoR;
     this.brazoLeft = new THREE.Object3D();
     this.brazoLeft.add(brazoL);
@@ -172,8 +172,8 @@ class Esteban extends THREE.Object3D {
       }),
     ];
     //Izquierda
-    let piernaL = new THREE.Mesh(geometriaExtremidad, texturaPiernaL);
-    let piernaR = new THREE.Mesh(geometriaExtremidad, texturaPiernaR);
+    const piernaL = new THREE.Mesh(geometriaExtremidad, texturaPiernaL);
+    const piernaR = new THREE.Mesh(geometriaExtremidad, texturaPiernaR);
 
     piernaL.position.y = -6 / PM.PIXELES_ESTANDAR;
     piernaR.position.y = -6 / PM.PIXELES_ESTANDAR;
@@ -208,9 +208,9 @@ class Esteban extends THREE.Object3D {
       }),
     ];
     //TORSO
-    let geometriaTorso = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
+    const geometriaTorso = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
 
-    let torso = new THREE.Mesh(geometriaTorso, texturaCuerpo);
+    const torso = new THREE.Mesh(geometriaTorso, texturaCuerpo);
     torso.position.y = 18 / PM.PIXELES_ESTANDAR;
 
     //ESTO ES NECESARIO PARA QUE FUNCIONE LA ANIMACION DE STRAFE
@@ -225,7 +225,7 @@ class Esteban extends THREE.Object3D {
 
     this.add(this.wrapperFinal);
 
-    let boundingBoxGeom = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 32 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
+    const boundingBoxGeom = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 32 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
     this.boundingBox = new THREE.Mesh(boundingBoxGeom, new THREE.MeshPhongMaterial());
     this.boundingBox.position.y += 16 / PM.PIXELES_ESTANDAR
 
@@ -240,7 +240,7 @@ class Esteban extends THREE.Object3D {
     this.cameraControls = camara;
   }
 
-  createGUI(gui, titleGui) {
+  createGUI(_gui, _titleGui) {
 
   }
 
@@ -254,7 +254,7 @@ class Esteban extends THREE.Object3D {
 
 
   animacion(esForward, velocidad){
-    let velFinal=(esForward)? velocidad : -velocidad;
+    const velFinal=(esForward)? velocidad : -velocidad;
 
     if (this.cambiarAnimacion) {
       this.piernaLW1.rotation.x += velFinal
@@ -279,8 +279,8 @@ class Esteban extends THREE.Object3D {
   }
 
   update(bloques, teclasPulsadas) {
-    let delta= this.clock.getDelta();
-    let velocidad = delta * 4.317;
+    const delta= this.clock.getDelta();
+    const velocidad = delta * 4.317;
     // Derive orientation from camera geometry — works regardless of whether
     // OrbitControls or pointer-lock mode is driving the camera.
     const cp = this.cameraControls.object.position;
@@ -294,7 +294,7 @@ class Esteban extends THREE.Object3D {
     this.boundingBox.rotation.y = - Math.PI + this.cameraControls.getAzimuthalAngle();
 
 
-    let vectorDir=new THREE.Vector3(0, 0, 0);
+    const vectorDir=new THREE.Vector3(0, 0, 0);
 
     let moviendose=false;
     let esForward=true;
@@ -355,7 +355,7 @@ class Esteban extends THREE.Object3D {
       }
     }
 
-    let velocidadFinal=(teclasPulsadas["SHIFT"])? velocidad*2 : velocidad;
+    const velocidadFinal=(teclasPulsadas["SHIFT"])? velocidad*2 : velocidad;
 
     if(moviendose)
       this.animacion(esForward, velocidadFinal);

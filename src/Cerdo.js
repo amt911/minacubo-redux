@@ -209,7 +209,7 @@ class Cerdo extends THREE.Object3D {
 
 
 
-    let boundingBoxGeom = new THREE.BoxGeometry(10 / PM.PIXELES_ESTANDAR, /*14*/32 / PM.PIXELES_ESTANDAR, 16 / PM.PIXELES_ESTANDAR);
+    const boundingBoxGeom = new THREE.BoxGeometry(10 / PM.PIXELES_ESTANDAR, /*14*/32 / PM.PIXELES_ESTANDAR, 16 / PM.PIXELES_ESTANDAR);
     this.boundingBox = new THREE.Mesh(boundingBoxGeom, new THREE.MeshPhongMaterial());
     this.boundingBox.position.y += 24/PM.PIXELES_ESTANDAR;//32 / PM.PIXELES_ESTANDAR
 
@@ -268,7 +268,7 @@ class Cerdo extends THREE.Object3D {
   }
 
   animacion(esForward, velocidad){
-    let velFinal=(esForward)? velocidad : -velocidad;
+    const velFinal=(esForward)? velocidad : -velocidad;
 
     if (this.cambiarAnimacion) {
       this.pataLeftDel.rotation.x += velFinal
@@ -293,11 +293,11 @@ class Cerdo extends THREE.Object3D {
   }
 
   update (bloques, deltaMov) {
-    let velocidad =  deltaMov * 4.317;
+    const velocidad =  deltaMov * 4.317;
     this.animacion(true, velocidad)
 
     
-    let vectorMovimiento = new THREE.Vector3(0, 0, 1);
+    const vectorMovimiento = new THREE.Vector3(0, 0, 1);
     //vectormovimiento es el vector entre el modelo y el zombie
     this.translateOnAxis(vectorMovimiento.normalize(), velocidad);
     this.boundingBox.translateOnAxis(vectorMovimiento, velocidad);

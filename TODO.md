@@ -22,7 +22,7 @@ Roadmap para robustez (Docker, tests, TDD) y mejoras de juego.
 ## Fase 2 — TDD lógica pura
 
 - [x] Usar npm para los paquetes, ahora mismo están copiados a lo cutre
-- [ ] Mejorar la lógica por completo de colisiones. Ahora mismo va muy mal (si se pone debajo de un árbol y se salta se sube automáticamente a la copa, si se colisiona contra un cubo y se sigue andando tiembla, etc)
+- [x] Mejorar la lógica por completo de colisiones. Ahora mismo va muy mal (si se pone debajo de un árbol y se salta se sube automáticamente a la copa, si se colisiona contra un cubo y se sigue andando tiembla, etc)
 - [x] Mejorar la iluminación, ahora mismo es plana.
 - [x] Revisar el algoritmo de ruido perlin y usar mejor un paquete npm.
 - [x] Extraer AABB de `colisiones.js` a función pura testable
@@ -35,9 +35,10 @@ Roadmap para robustez (Docker, tests, TDD) y mejoras de juego.
 - [x] Tests terrain con seed fijo (snapshot heightmap)
 - [x] Hacer el feedback muchísimo más eficiente para que esté siempre activo y no consuma tantos recursos.
 - [x] Mejorar la distribución de los archivos, ahora mismo están todos al tuntún.
-- [ ] Mejorar controles juego, ahora mismo para mover la cámara se hace con la rueda del ratón pulsándola y no se puede hacer nada más. Asimismo, si se mueve la cámara hace clip por debajo del terreno. Lo que quiero es algo como minecraft porque ademas no se puede mover la camara y mover al jugador al mismo tiempo, provoca que se quede pillado moviendose en las ultimas teclas pulsadas.
+- [x] Mejorar controles juego, ahora mismo para mover la cámara se hace con la rueda del ratón pulsándola y no se puede hacer nada más. Asimismo, si se mueve la cámara hace clip por debajo del terreno. Lo que quiero es algo como minecraft porque ademas no se puede mover la camara y mover al jugador al mismo tiempo, provoca que se quede pillado moviendose en las ultimas teclas pulsadas.
 - [ ] Cambiar y usar TypeScript 
 - [x] Mejorar cámara, quiero que cuando se mueva lo más abajo posible no clipee con el suelo, pero esto quiere decir que cuando haya algún suelo más abajo, debe bajar la cámara más, así como si hay montañas. En el caso de las montañas, lo suyo es acercar la cámara para no ver el interior de las mismas.
+- [ ] Limpiar funciones y paquetes deprecated (por ejemplo, tween.update)
 
 ## Fase 3 — Refactor god class
 
@@ -46,7 +47,7 @@ Romper `MyScene.js` (1105 líneas):
 - [ ] Extraer `ChunkManager.js`
 - [ ] Extraer `InputHandler.js`
 - [ ] Extraer `NPCManager.js`
-- [ ] Extraer `DayNightCycle.js`
+- [x] Extraer `DayNightCycle.js`
 - [ ] Extraer `RaycastInteraction.js`
 - [ ] Extraer `BlockRegistry.js` (catálogo Cubo subclases)
 - [ ] Event bus mini (mitt vendored o 20-line custom) en `libs/`
