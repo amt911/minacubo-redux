@@ -382,11 +382,29 @@ this.puntoscerdos = [];
     this.cameraControl.target.set(this.model.position.x, this.model.position.y, this.model.position.z)
     this.cameraControl.enablePan = false;
     this.cameraControl.enableZoom = false;
-    this.cameraControl.rotateSpeed = 5;
+    this.cameraControl.rotateSpeed = 3;
+
+    // Tope vertical: la camara no puede pasar por debajo del horizonte (asi
+    // evita clipping por debajo del terreno) ni mirar perfectamente al
+    // suelo desde arriba. El rango util es ~25° desde arriba a ~85° (casi
+    // horizontal, justo antes de meterse en el suelo).
+    this.cameraControl.minPolarAngle = Math.PI * 0.15;
+    this.cameraControl.maxPolarAngle = Math.PI * 0.48;
+
+    // Damping para que el movimiento no sea brusco al soltar el boton.
+    // Requiere llamar a cameraControl.update() cada frame (ya se hace en
+    // update() via el flujo de OrbitControls).
+    this.cameraControl.enableDamping = true;
+    this.cameraControl.dampingFactor = 0.08;
+
+    // Click izq = romper bloque, click der = colocar bloque, rueda = cambiar
+    // bloque. Solo queda libre el boton del medio para rotar la camara.
+    // Si en el futuro se mueve place/break a otro input (e.g. pointer lock
+    // y W/A/S/D para placer/break), se podria mapear LEFT/RIGHT a ROTATE.
     this.cameraControl.mouseButtons = {
-      LEFT: THREE.MOUSE.DOLLY,
+      LEFT: null,
       MIDDLE: THREE.MOUSE.ROTATE,
-      RIGHT: THREE.MOUSE.PAN
+      RIGHT: null
     }
 
     this.model.addCamara(this.cameraControl);
