@@ -17,7 +17,7 @@ import * as estructuras from './estructuras.js'
 
 import * as PM from './ParametrosMundo.js'
 import { identificarChunk } from './chunkMath.js'
-import { createTerrainNoise } from './noise.js'
+import { createTerrainNoise, terrainHeight } from './noise.js'
 
 /// La clase fachada del modelo
 /**
@@ -107,10 +107,6 @@ class MyScene extends THREE.Scene {
     this.h = new cubos.Hierba();
     let matrix = new THREE.Matrix4();
     this.noise = createTerrainNoise();
-    this.amplitud = 1 + (Math.random() * 45);
-    let inc = 0.02;
-    let xoff;
-    let zoff;
 
 
     //this.puntoscerdos = [[]];
@@ -219,10 +215,7 @@ this.puntoscerdos = [];
 
         for (let x = i * this.TAM_CHUNK; x < (i * this.TAM_CHUNK) + this.TAM_CHUNK; x++) {   //PARA GENERAR LOS BLOQUES DE UN CHUNK
           for (let z = j * this.TAM_CHUNK; z < (j * this.TAM_CHUNK) + this.TAM_CHUNK; z++) {
-            xoff = inc * x;
-            zoff = inc * z;
-
-            let v = Math.round(this.noise(xoff, zoff) * this.amplitud);
+            let v = terrainHeight(this.noise, x, z);
             if(i == 0 && j == 0){
               if(zombiex + i*this.TAM_CHUNK == x && zombiez + j*this.TAM_CHUNK == z){
                 zombiey = v;
@@ -853,9 +846,6 @@ this.puntoscerdos = [];
         "Cristal": 0
       };
 
-      let inc = 0.02;
-      let xoff;
-      let zoff;
       let matrix = new THREE.Matrix4();
       let contador=0, contador2=0, contador3=0, contador4=0;
 
@@ -888,10 +878,7 @@ this.puntoscerdos = [];
             let bloques = [];
             for (let x = a * this.TAM_CHUNK; x < a * this.TAM_CHUNK + this.TAM_CHUNK; x++) {
               for (let z = i * this.TAM_CHUNK; z < i * this.TAM_CHUNK + this.TAM_CHUNK; z++) {
-                xoff = inc * z;
-                zoff = inc * x;
-
-                let v = Math.round(this.noise(xoff, zoff) * this.amplitud);
+                let v = terrainHeight(this.noise, x, z);
                 matrix.setPosition(z * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR, x * 16 / PM.PIXELES_ESTANDAR);
                 this.mesh["Hierba"].setMatrixAt(l["Hierba"], matrix);
 

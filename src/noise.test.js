@@ -1,6 +1,6 @@
 // @ts-check
 import { describe, it, expect } from 'vitest';
-import { createTerrainNoise, mulberry32 } from './noise.js';
+import { createTerrainNoise, mulberry32, fbm, terrainHeight } from './noise.js';
 
 describe('mulberry32', () => {
   it('mismo seed produce misma secuencia', () => {
@@ -63,6 +63,73 @@ describe('createTerrainNoise', () => {
       const row = [];
       for (let y = 0; y < 4; y++) {
         row.push(Math.round(noise(x * 0.1, y * 0.1) * 100) / 100);
+      }
+      heightmap.push(row);
+    }
+    expect(heightmap).toMatchSnapshot();
+  });
+});
+
+describe('fbm', () => {
+  it('mismo seed → mismo valor en (x, y)', () => {
+    const n = createTerrainNoise(5);
+    expect(fbm(n, 1.5, 2.5)).toBe(fbm(n, 1.5, 2.5));
+  });
+
+  it('octavas mayores no rompen el rango [-1, 1]', () => {
+    const n = createTerrainNoise(42);
+    for (let i = 0; i < 50; i++) {
+      const v = fbm(n, i * 0.3, i * 0.7, { octaves: 5 });
+      expect(v).toBeGreaterThanOrEqual(-1);
+      expect(v).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe('terrainHeight', () => {
+  it('determinista con seed fijo', () => {
+    const n = createTerrainNoise(2024);
+    expect(terrainHeight(n, 10, 20)).toBe(terrainHeight(n, 10, 20));
+  });
+
+  it('mayoria del mapa esta a baja altura (plain-dominant)', () => {
+    const n = createTerrainNoise(2024);
+    const samples = [];
+    for (let x = 0; x < 100; x++) {
+      for (let z = 0; z < 100; z++) {
+        samples.push(terrainHeight(n, x, z));
+      }
+    }
+    const low = samples.filter((h) => h <= 3).length;
+    expect(low / samples.length).toBeGreaterThan(0.5);
+  });
+
+  it('hay picos altos ocasionales (mountains)', () => {
+    const n = createTerrainNoise(2024);
+    let max = -Infinity;
+    for (let x = 0; x < 200; x++) {
+      for (let z = 0; z < 200; z++) {
+        max = Math.max(max, terrainHeight(n, x, z));
+      }
+    }
+    expect(max).toBeGreaterThanOrEqual(8);
+  });
+
+  it('alturas son enteros (Math.round aplicado)', () => {
+    const n = createTerrainNoise(7);
+    for (let i = 0; i < 20; i++) {
+      const h = terrainHeight(n, i, i * 2);
+      expect(Number.isInteger(h)).toBe(true);
+    }
+  });
+
+  it('snapshot heightmap reproducible (8x8 con seed 2024)', () => {
+    const n = createTerrainNoise(2024);
+    const heightmap = [];
+    for (let x = 0; x < 8; x++) {
+      const row = [];
+      for (let z = 0; z < 8; z++) {
+        row.push(terrainHeight(n, x, z));
       }
       heightmap.push(row);
     }
