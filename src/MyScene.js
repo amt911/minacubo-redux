@@ -291,15 +291,7 @@ this.puntoscerdos = [];
     }
 
     for (let aux in this.mesh) {
-      // Cada bloque proyecta y recibe sombra del sol. HojasRoble podria
-      // saltarse castShadow para evitar sombras "manchadas" por la
-      // transparencia, pero por ahora mantenemos uniforme.
-      this.mesh[aux].castShadow = true;
-      this.mesh[aux].receiveShadow = true;
-      // InstancedMesh no actualiza el boundingSphere al cambiar matrices,
-      // asi que su frustum culling puede excluir el mesh tanto del render
-      // principal como del shadow pass. Forzamos render siempre.
-      this.mesh[aux].frustumCulled = false;
+      this.aplicarSombrasInstancedMesh(this.mesh[aux]);
       this.add(this.mesh[aux]);
     }
 
@@ -479,6 +471,28 @@ this.puntoscerdos = [];
     });
   }
 
+  // Configura un InstancedMesh para que proyecte y reciba sombras
+  // correctamente.
+  //
+  // Bug conocido (three.js r140): un InstancedMesh con array de materiales
+  // (uno por cara de BoxGeometry) NO escribe al shadow map. El renderer
+  // intenta resolver geometry.groups para el shadow pass y falla, dejando
+  // la depth map vacia para ese mesh.
+  // Workaround: customDepthMaterial fuerza al shadow pass a usar UN solo
+  // material de profundidad, ignorando los groups del color pass. Las
+  // sombras vuelven a aparecer manteniendo el color con material array.
+  //
+  // frustumCulled = false porque InstancedMesh no recalcula boundingSphere
+  // al hacer setMatrixAt y el shadow pass podria descartar el mesh entero.
+  aplicarSombrasInstancedMesh(mesh) {
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.frustumCulled = false;
+    mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
+      depthPacking: THREE.RGBADepthPacking,
+    });
+  }
+
   // Mantiene el sol y su target centrados sobre el jugador. Sin esto el
   // frustum ortografico del shadowMap, fijo en el espacio mundo, se queda
   // atras y las sombras desaparecen al moverse.
@@ -636,9 +650,7 @@ this.puntoscerdos = [];
         let l = 0;
 
         this.mesh[this.bloqueSeleccionado[this.objeto]] = new THREE.InstancedMesh(this.h.geometria, this.materialesText[this.bloqueSeleccionado[this.objeto]], ++this.sizeIMesh[this.bloqueSeleccionado[this.objeto]]);
-        this.mesh[this.bloqueSeleccionado[this.objeto]].castShadow = true;
-        this.mesh[this.bloqueSeleccionado[this.objeto]].receiveShadow = true;
-        this.mesh[this.bloqueSeleccionado[this.objeto]].frustumCulled = false;
+        this.aplicarSombrasInstancedMesh(this.mesh[this.bloqueSeleccionado[this.objeto]]);
 
         for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
           for (let i = this.chunkMinMax.min.x; i <= this.chunkMinMax.max.x; i++) {
@@ -758,9 +770,7 @@ this.puntoscerdos = [];
 
         let l = 0;
         this.mesh[objetosIntersecados[0].tipo] = new THREE.InstancedMesh(this.h.geometria, this.materialesText[objetosIntersecados[0].tipo], --this.sizeIMesh[objetosIntersecados[0].tipo]);
-        this.mesh[objetosIntersecados[0].tipo].castShadow = true;
-        this.mesh[objetosIntersecados[0].tipo].receiveShadow = true;
-        this.mesh[objetosIntersecados[0].tipo].frustumCulled = false;
+        this.aplicarSombrasInstancedMesh(this.mesh[objetosIntersecados[0].tipo]);
 
 
         for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
@@ -904,9 +914,7 @@ this.puntoscerdos = [];
       for (let tipo in this.mesh) {
         this.remove(this.mesh[tipo]);
         this.mesh[tipo] = new THREE.InstancedMesh(this.h.geometria, this.materialesText[tipo], this.sizeIMesh[tipo]);
-        this.mesh[tipo].castShadow = true;
-        this.mesh[tipo].receiveShadow = true;
-        this.mesh[tipo].frustumCulled = false;
+        this.aplicarSombrasInstancedMesh(this.mesh[tipo]);
       }
 
 

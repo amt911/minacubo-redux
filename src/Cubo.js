@@ -82,12 +82,12 @@ class HojaRoble extends Cubo {
     const loader = new THREE.TextureLoader();
 
     const textura = [
-      new THREE.MeshPhongMaterial({map: loader.load("./texturas/hojaroble/hoja.png"), transparent: true, color: 0x345345}),
-      new THREE.MeshPhongMaterial({map: loader.load("./texturas/hojaroble/hoja.png"), transparent: true, color: 0x345345}),
-      new THREE.MeshPhongMaterial({map: loader.load("./texturas/hojaroble/hoja.png"), transparent: true, color: 0x345345}),
-      new THREE.MeshPhongMaterial({map: loader.load("./texturas/hojaroble/hoja.png"), transparent: true, color: 0x345345}),
-      new THREE.MeshPhongMaterial({map: loader.load("./texturas/hojaroble/hoja.png"), transparent: true, color: 0x345345}),
-      new THREE.MeshPhongMaterial({map: loader.load("./texturas/hojaroble/hoja.png"), transparent: true, color: 0x345345}),
+      new THREE.MeshPhongMaterial({map: loader.load("./texturas/hojaroble/hoja.png"), alphaTest: 0.5, color: 0x345345}),
+      new THREE.MeshPhongMaterial({map: loader.load("./texturas/hojaroble/hoja.png"), alphaTest: 0.5, color: 0x345345}),
+      new THREE.MeshPhongMaterial({map: loader.load("./texturas/hojaroble/hoja.png"), alphaTest: 0.5, color: 0x345345}),
+      new THREE.MeshPhongMaterial({map: loader.load("./texturas/hojaroble/hoja.png"), alphaTest: 0.5, color: 0x345345}),
+      new THREE.MeshPhongMaterial({map: loader.load("./texturas/hojaroble/hoja.png"), alphaTest: 0.5, color: 0x345345}),
+      new THREE.MeshPhongMaterial({map: loader.load("./texturas/hojaroble/hoja.png"), alphaTest: 0.5, color: 0x345345}),
       
   ];
   this.material = textura; 
@@ -182,12 +182,12 @@ class Cristal extends Cubo {
     const loader = new THREE.TextureLoader();
 
     const textura = [
-      new THREE.MeshPhongMaterial({map: loader.load("./texturas/cristal.png"), transparent: true}),
-      new THREE.MeshPhongMaterial({map: loader.load("./texturas/cristal.png"), transparent: true}),
-      new THREE.MeshPhongMaterial({map: loader.load("./texturas/cristal.png"), transparent: true}),
-      new THREE.MeshPhongMaterial({map: loader.load("./texturas/cristal.png"), transparent: true}),
-      new THREE.MeshPhongMaterial({map: loader.load("./texturas/cristal.png"), transparent: true}),
-      new THREE.MeshPhongMaterial({map: loader.load("./texturas/cristal.png"), transparent: true}),
+      new THREE.MeshPhongMaterial({map: loader.load("./texturas/cristal.png"), alphaTest: 0.5}),
+      new THREE.MeshPhongMaterial({map: loader.load("./texturas/cristal.png"), alphaTest: 0.5}),
+      new THREE.MeshPhongMaterial({map: loader.load("./texturas/cristal.png"), alphaTest: 0.5}),
+      new THREE.MeshPhongMaterial({map: loader.load("./texturas/cristal.png"), alphaTest: 0.5}),
+      new THREE.MeshPhongMaterial({map: loader.load("./texturas/cristal.png"), alphaTest: 0.5}),
+      new THREE.MeshPhongMaterial({map: loader.load("./texturas/cristal.png"), alphaTest: 0.5}),
   ]; 
 
   this.material = textura;
