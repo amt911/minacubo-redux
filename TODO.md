@@ -34,7 +34,7 @@ Roadmap para robustez (Docker, tests, TDD) y mejoras de juego.
 - [ ] Seed determinista Perlin (param opcional, fallback random)
 - [ ] Tests terrain con seed fijo (snapshot heightmap)
 - [ ] Hacer el feedback muchísimo más eficiente para que esté siempre activo y no consuma tantos recursos.
-- [ ] Mejorar la distribución de los archivos, ahora mismo están todos al tuntún.
+- [x] Mejorar la distribución de los archivos, ahora mismo están todos al tuntún.
 
 ## Fase 3 — Refactor god class
 
