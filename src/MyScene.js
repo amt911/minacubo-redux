@@ -89,10 +89,11 @@ class MyScene extends THREE.Scene {
     this.model = new Esteban(this.gui, "Esteban");
     this.createCamera();
 
-
+    this.habilitarSombrasEnSubarbol(this.model);
     this.add(this.model);
 
     this.zombie = new Zombie(this.gui, "Zombie");
+    this.habilitarSombrasEnSubarbol(this.zombie);
 
     this.zombie.position.y+=10;
     this.zombie.boundingBox.position.y+=10;
@@ -314,6 +315,7 @@ this.puntoscerdos = [];
 
     //Creacion del cerdo
     this.cerdo = new Cerdo(this.gui, "Cerdo");
+    this.habilitarSombrasEnSubarbol(this.cerdo);
     this.cerdo.position.set(this.cerdo.position.x+this.puntoscerdos[0].x, this.cerdo.position.y + this.puntoscerdos[0].y+0.1, this.cerdo.position.z + this.puntoscerdos[0].z);
     this.cerdo.boundingBox.position.set(this.cerdo.boundingBox.position.x+this.puntoscerdos[0].x,this.cerdo.boundingBox.position.y+ this.puntoscerdos[0].y+0.1, this.cerdo.boundingBox.position.z + this.puntoscerdos[0].z);
     this.add(this.cerdo);
@@ -348,7 +350,10 @@ this.puntoscerdos = [];
       this.background=new THREE.Color(rgbInicial.r,rgbInicial.g,rgbInicial.b);
 
       this.spotLight.intensity=rgbInicial.intensidad * 0.3;
-      this.sunLight.intensity=rgbInicial.intensidad * 1.6;
+      // Sun nunca baja de 0.5 para que las sombras se aprecien incluso en
+      // la "noche" del ciclo dia/noche. Ya tenemos contraste suficiente
+      // con ambient + hemi atenuandose.
+      this.sunLight.intensity = 0.5 + rgbInicial.intensidad * 1.1;
 
     }).yoyo(true).repeat(Infinity).start();
   }
@@ -462,6 +467,18 @@ this.puntoscerdos = [];
     this.add(this.sunLight.target);
   }
 
+  // Recorre un Object3D arbitrario y activa cast + receive shadow en
+  // cada Mesh hijo. Necesario para personajes/NPCs construidos como grupos
+  // con cabeza/torso/extremidades separadas.
+  habilitarSombrasEnSubarbol(obj) {
+    obj.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+  }
+
   // Mantiene el sol y su target centrados sobre el jugador. Sin esto el
   // frustum ortografico del shadowMap, fijo en el espacio mundo, se queda
   // atras y las sombras desaparecen al moverse.
@@ -476,7 +493,7 @@ this.puntoscerdos = [];
 
   setLightIntensity(valor) {
     this.spotLight.intensity = valor * 0.3;
-    this.sunLight.intensity = valor * 1.6;
+    this.sunLight.intensity = 0.5 + valor * 1.1;
   }
 
   setAxisVisible(valor) {
@@ -489,10 +506,11 @@ this.puntoscerdos = [];
     // Se instancia un Renderer   WebGL
     let renderer = new THREE.WebGLRenderer({ antialias: true });
 
-    // Sombras: PCFSoft = blandas, mas caras que PCF basico pero las
-    // sombras de bloques quedan menos pixeladas.
+    // Sombras: PCF (no Soft) → bordes mas duros pero claramente visibles.
+    // PCFSoft difuminaba tanto que con mapSize 2048 sobre 168x168 las
+    // sombras pequenas desaparecian.
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
 
     // Se establece un color de fondo en las imágenes que genera el render
     renderer.setClearColor(new THREE.Color(0xEEEEEE), 1.0);
