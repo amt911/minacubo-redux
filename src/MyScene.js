@@ -457,6 +457,18 @@ this.puntoscerdos = [];
 
     this.add(this.sunLight);
     this.add(this.sunLight.target);
+
+    // DEBUG: helper que dibuja el frustum del shadow camera. Si las sombras
+    // no aparecen, comprobar que las lineas del helper engloban el area
+    // donde caminas. Si el helper se ve lejos o pequeno, el frustum no
+    // cubre la escena → ajustar shadowExtent o updateSunPosition.
+    this._shadowHelper = new THREE.CameraHelper(this.sunLight.shadow.camera);
+    this.add(this._shadowHelper);
+
+    console.log('[lights] shadowMap.enabled=', this.renderer.shadowMap.enabled);
+    console.log('[lights] sunLight.castShadow=', this.sunLight.castShadow);
+    console.log('[lights] shadow.mapSize=', this.sunLight.shadow.mapSize);
+    console.log('[lights] shadow.camera ortho=', cam.left, cam.right, cam.top, cam.bottom, cam.near, cam.far);
   }
 
   // Recorre un Object3D arbitrario y activa cast + receive shadow en
@@ -471,26 +483,13 @@ this.puntoscerdos = [];
     });
   }
 
-  // Configura un InstancedMesh para que proyecte y reciba sombras
-  // correctamente.
-  //
-  // Bug conocido (three.js r140): un InstancedMesh con array de materiales
-  // (uno por cara de BoxGeometry) NO escribe al shadow map. El renderer
-  // intenta resolver geometry.groups para el shadow pass y falla, dejando
-  // la depth map vacia para ese mesh.
-  // Workaround: customDepthMaterial fuerza al shadow pass a usar UN solo
-  // material de profundidad, ignorando los groups del color pass. Las
-  // sombras vuelven a aparecer manteniendo el color con material array.
-  //
-  // frustumCulled = false porque InstancedMesh no recalcula boundingSphere
-  // al hacer setMatrixAt y el shadow pass podria descartar el mesh entero.
+  // Configura un InstancedMesh para que proyecte y reciba sombras.
+  // frustumCulled=false porque InstancedMesh no recalcula boundingSphere
+  // al cambiar matrices: sin esto el shadow pass podria descartar el mesh.
   aplicarSombrasInstancedMesh(mesh) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
-    mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
-      depthPacking: THREE.RGBADepthPacking,
-    });
   }
 
   // Mantiene el sol y su target centrados sobre el jugador. Sin esto el
