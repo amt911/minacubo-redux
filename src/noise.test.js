@@ -100,7 +100,7 @@ describe('terrainHeight', () => {
         samples.push(terrainHeight(n, x, z));
       }
     }
-    const inHillRange = samples.filter((h) => h >= -2 && h <= 10).length;
+    const inHillRange = samples.filter((h) => h >= -3 && h <= 14).length;
     expect(inHillRange / samples.length).toBeGreaterThan(0.7);
   });
 

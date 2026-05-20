@@ -71,27 +71,27 @@ export function fbm(noiseFn, x, y, opts = {}) {
  * @param {number} x  world coord
  * @param {number} z  world coord
  * @param {object} [opts]
- * @param {number} [opts.baseline]          default 3
+ * @param {number} [opts.baseline]          default 4
  * @param {number} [opts.detailFreq]        default 0.05
  * @param {number} [opts.detailAmplitude]   default 1
  * @param {number} [opts.hillFreq]          default 0.015
- * @param {number} [opts.hillAmplitude]     default 3 (gentle rolling)
+ * @param {number} [opts.hillAmplitude]     default 7 (rolling hills everywhere)
  * @param {number} [opts.mountainFreq]      default 0.003 (broad, gentle slopes)
- * @param {number} [opts.mountainAmplitude] default 40 (tall peaks)
- * @param {number} [opts.mountainThreshold] in [-1, 1], default 0.5 (sparse)
+ * @param {number} [opts.mountainAmplitude] default 45 (tall peaks)
+ * @param {number} [opts.mountainThreshold] in [-1, 1], default 0.3 (moderate sparsity)
  * @param {number} [opts.mountainExponent]  curve sharpness, default 4 (smooth base + sharp top)
  * @returns {number} integer block height
  */
 export function terrainHeight(noiseFn, x, z, opts = {}) {
   const {
-    baseline = 3,
+    baseline = 4,
     detailFreq = 0.05,
     detailAmplitude = 1,
     hillFreq = 0.015,
-    hillAmplitude = 3,
+    hillAmplitude = 7,
     mountainFreq = 0.003,
-    mountainAmplitude = 40,
-    mountainThreshold = 0.5,
+    mountainAmplitude = 45,
+    mountainThreshold = 0.3,
     mountainExponent = 4,
   } = opts;
 
