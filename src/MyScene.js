@@ -338,7 +338,8 @@ this.puntoscerdos = [];
 
       this.background=new THREE.Color(rgbInicial.r,rgbInicial.g,rgbInicial.b);
 
-      this.spotLight.intensity=rgbInicial.intensidad;
+      this.spotLight.intensity=rgbInicial.intensidad * 0.6;
+      this.sunLight.intensity=rgbInicial.intensidad * 0.9;
 
     }).yoyo(true).repeat(Infinity).start();
   }
@@ -406,16 +407,28 @@ this.puntoscerdos = [];
   }
 
   createLights() {
-    let ambientLight = new THREE.AmbientLight(0xccddee, 0.35);
+    // Ambient: relleno minimo para que las caras en sombra no queden negras.
+    let ambientLight = new THREE.AmbientLight(0xb0c4de, 0.15);
     this.add(ambientLight);
 
-    this.spotLight = new THREE.HemisphereLight(0xfdfbd3, 0xfdfbd3, this.guiControls.lightIntensity)
+    // Hemisphere: cielo azul arriba, suelo calido marron abajo. Da el
+    // "tinte natural" segun la orientacion de la cara del bloque.
+    // Conservamos el nombre `spotLight` para que el ciclo dia/noche siga
+    // animando esta luz (intensity tweenada).
+    this.spotLight = new THREE.HemisphereLight(0x87CEEB, 0x4a3520, this.guiControls.lightIntensity * 0.6);
     this.spotLight.position.set(0, 60, 0);
     this.add(this.spotLight);
+
+    // DirectionalLight: el "sol". Diagonal para sombrear caras laterales
+    // distinto que el suelo. Sin shadows todavia (cost FPS).
+    this.sunLight = new THREE.DirectionalLight(0xfff4d6, 0.9);
+    this.sunLight.position.set(50, 100, 30);
+    this.add(this.sunLight);
   }
 
   setLightIntensity(valor) {
-    this.spotLight.intensity = valor;
+    this.spotLight.intensity = valor * 0.6;
+    this.sunLight.intensity = valor * 0.9;
   }
 
   setAxisVisible(valor) {
