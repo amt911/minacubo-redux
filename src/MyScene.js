@@ -384,12 +384,12 @@ this.puntoscerdos = [];
     this.cameraControl.enableZoom = false;
     this.cameraControl.rotateSpeed = 3;
 
-    // Tope vertical: la camara no puede pasar por debajo del horizonte (asi
-    // evita clipping por debajo del terreno) ni mirar perfectamente al
-    // suelo desde arriba. El rango util es ~25° desde arriba a ~85° (casi
-    // horizontal, justo antes de meterse en el suelo).
+    // Tope vertical: el springarm (_clampCamDist) se encarga de evitar
+    // clipping con el terreno, por lo que podemos permitir que la camara
+    // orbit hasta casi horizontal (PI*0.49 ≈ 88°). El tope superior evita
+    // mirar completamente desde arriba (bird's eye extremo).
     this.cameraControl.minPolarAngle = Math.PI * 0.15;
-    this.cameraControl.maxPolarAngle = Math.PI * 0.48;
+    this.cameraControl.maxPolarAngle = Math.PI * 0.49;
 
     // Damping para que el movimiento no sea brusco al soltar el boton.
     // Requiere llamar a cameraControl.update() cada frame (ya se hace en
@@ -397,15 +397,24 @@ this.puntoscerdos = [];
     this.cameraControl.enableDamping = true;
     this.cameraControl.dampingFactor = 0.08;
 
-    // Click izq = romper bloque, click der = colocar bloque, rueda = cambiar
-    // bloque. Solo queda libre el boton del medio para rotar la camara.
-    // Si en el futuro se mueve place/break a otro input (e.g. pointer lock
-    // y W/A/S/D para placer/break), se podria mapear LEFT/RIGHT a ROTATE.
+    // Click izq = romper bloque (mouseup), arrastrar der = rotar camara,
+    // click der sin arrastrar = colocar bloque (mouseup con threshold).
+    // El medio queda como alternativa para usuarios con rueda fisica.
     this.cameraControl.mouseButtons = {
       LEFT: null,
       MIDDLE: THREE.MOUSE.ROTATE,
-      RIGHT: null
+      RIGHT: THREE.MOUSE.ROTATE
     }
+
+    // Distancia deseada de la camara al objetivo (springarm). Se mantiene
+    // fija entre frames; el springarm la recorta cuando hay terreno bloqueando.
+    const headOffset = 36 / PM.PIXELES_ESTANDAR;
+    const headPos = new THREE.Vector3(
+      this.model.position.x,
+      this.model.position.y + headOffset,
+      this.model.position.z
+    );
+    this._cameraDesiredDist = this.camera.position.distanceTo(headPos);
 
     this.model.addCamara(this.cameraControl);
   }
@@ -569,110 +578,11 @@ this.puntoscerdos = [];
   }
 
   onDocumentMouseDown(event) {
-
+    // Registrar posicion de inicio para distinguir click de arrastrar.
+    // El boton der arrastrado rota la camara (OrbitControls); si apenas
+    // se mueve (<= 5px) se interpreta como click y coloca un bloque en mouseup.
     if (event.which == 3) {
-      let mouse = new THREE.Vector2();
-
-      mouse.x = (0.5) * 2 - 1;
-      mouse.y = 1 - 2 * (0.5);
-
-      let raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, this.camera);
-
-      let objetosIntersecados = [];
-      for (let tipo in this.mesh) {
-        let objetos = raycaster.intersectObject(this.mesh[tipo], true);
-
-        if (objetos[0] != undefined && objetos.length > 0 && objetos[0].distance <= 20) {
-          let index = objetos[0].face.materialIndex;
-          let posicion = objetos[0].point;
-          let coord = { x: 0, y: 0, z: 0 };
-
-          switch (index) {
-            case 0: //derecha (x pos)
-              coord = {
-                x: posicion.x + 0.5,
-                y: (posicion.y | 0) + 0.5,// + 0.5,
-                z: Math.round(posicion.z)
-              }
-              break;
-            case 1: //izquierda (x neg)
-              coord = {
-                x: posicion.x - 0.5,
-                y: (posicion.y | 0) + 0.5,
-                z: Math.round(posicion.z)
-              }
-              break;
-            case 2: //arriba (y pos)
-              coord = {
-                x: Math.round(posicion.x),
-                y: (posicion.y | 0) + 0.5,
-                z: Math.round(posicion.z)
-              }
-              break;
-            case 3: //abajo (y neg)
-              coord = {
-                x: Math.round(posicion.x),
-                y: (posicion.y | 0) - 0.5,
-                z: Math.round(posicion.z)
-              }
-              break;
-            case 4: //frente (z pos)
-              coord = {
-                x: Math.round(posicion.x),
-                y: (posicion.y | 0) + 0.5,// + 0.5,
-                z: posicion.z + 0.5
-              }
-              break;
-            case 5: //detras (z neg)
-              coord = {
-                x: Math.round(posicion.x),
-                y: (posicion.y | 0) + 0.5,
-                z: posicion.z - 0.5
-              }
-              break;
-          }
-          if (posicion.y < 0) {
-            coord.y = Math.floor(posicion.y) + 0.5;
-          }
-
-          objetosIntersecados.push({ tipo: tipo, coordenada: coord, distancia: objetos[0].distance });
-
-        }
-
-      }
-
-      //ordena objetos intersecados segun distancia
-      objetosIntersecados.sort(function (a, b) {
-        return a.distancia - b.distancia;
-      });
-
-
-      if(objetosIntersecados[0]!=undefined){  
-        let aux = this.identificarChunk(objetosIntersecados[0].coordenada.x, objetosIntersecados[0].coordenada.z);
-        this.chunk[aux.x][aux.z].push({ material: this.bloqueSeleccionado[this.objeto], x: objetosIntersecados[0].coordenada.x, y: objetosIntersecados[0].coordenada.y, z: objetosIntersecados[0].coordenada.z });
-        this.remove(this.mesh[this.bloqueSeleccionado[this.objeto]]);
-
-        let matrix = new THREE.Matrix4();
-        let l = 0;
-
-        this.mesh[this.bloqueSeleccionado[this.objeto]] = new THREE.InstancedMesh(this.h.geometria, this.materialesText[this.bloqueSeleccionado[this.objeto]], ++this.sizeIMesh[this.bloqueSeleccionado[this.objeto]]);
-        this.aplicarSombrasInstancedMesh(this.mesh[this.bloqueSeleccionado[this.objeto]]);
-
-        for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
-          for (let i = this.chunkMinMax.min.x; i <= this.chunkMinMax.max.x; i++) {
-            for (let j = 0; j < this.chunk[i][a].length; j++) {
-              if (this.chunk[i][a][j].material == this.bloqueSeleccionado[this.objeto]) {//objetosIntersecados[0].tipo){
-                matrix.setPosition(this.chunk[i][a][j].x, this.chunk[i][a][j].y, this.chunk[i][a][j].z);
-                this.mesh[this.bloqueSeleccionado[this.objeto]].setMatrixAt(l, matrix);
-                l++;
-              }
-            }
-          }
-        }
-
-        this.add(this.mesh[this.bloqueSeleccionado[this.objeto]]);
-      }
+      this._rightDragStart = { x: event.clientX, y: event.clientY };
     }
 
     else if (event.which == 1) {
@@ -798,6 +708,117 @@ this.puntoscerdos = [];
 
   }
 
+  onDocumentMouseUp(event) {
+    if (event.which !== 3) return;
+    if (!this._rightDragStart) return;
+
+    const dx = event.clientX - this._rightDragStart.x;
+    const dy = event.clientY - this._rightDragStart.y;
+    this._rightDragStart = null;
+
+    // Si el raton se movio mas de 5px fue un drag (rotacion de camara), no un click.
+    if (dx * dx + dy * dy > 25) return;
+
+    // Click derecho: colocar bloque apuntado por el centro de la pantalla.
+    let mouse = new THREE.Vector2();
+    mouse.x = (0.5) * 2 - 1;
+    mouse.y = 1 - 2 * (0.5);
+
+    let raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, this.camera);
+
+    let objetosIntersecados = [];
+    for (let tipo in this.mesh) {
+      let objetos = raycaster.intersectObject(this.mesh[tipo], true);
+
+      if (objetos[0] != undefined && objetos.length > 0 && objetos[0].distance <= 20) {
+        let index = objetos[0].face.materialIndex;
+        let posicion = objetos[0].point;
+        let coord = { x: 0, y: 0, z: 0 };
+
+        switch (index) {
+          case 0: //derecha (x pos)
+            coord = { x: posicion.x + 0.5, y: (posicion.y | 0) + 0.5, z: Math.round(posicion.z) };
+            break;
+          case 1: //izquierda (x neg)
+            coord = { x: posicion.x - 0.5, y: (posicion.y | 0) + 0.5, z: Math.round(posicion.z) };
+            break;
+          case 2: //arriba (y pos)
+            coord = { x: Math.round(posicion.x), y: (posicion.y | 0) + 0.5, z: Math.round(posicion.z) };
+            break;
+          case 3: //abajo (y neg)
+            coord = { x: Math.round(posicion.x), y: (posicion.y | 0) - 0.5, z: Math.round(posicion.z) };
+            break;
+          case 4: //frente (z pos)
+            coord = { x: Math.round(posicion.x), y: (posicion.y | 0) + 0.5, z: posicion.z + 0.5 };
+            break;
+          case 5: //detras (z neg)
+            coord = { x: Math.round(posicion.x), y: (posicion.y | 0) + 0.5, z: posicion.z - 0.5 };
+            break;
+        }
+        if (posicion.y < 0) {
+          coord.y = Math.floor(posicion.y) + 0.5;
+        }
+
+        objetosIntersecados.push({ tipo: tipo, coordenada: coord, distancia: objetos[0].distance });
+      }
+    }
+
+    objetosIntersecados.sort(function (a, b) { return a.distancia - b.distancia; });
+
+    if (objetosIntersecados[0] != undefined) {
+      let aux = this.identificarChunk(objetosIntersecados[0].coordenada.x, objetosIntersecados[0].coordenada.z);
+      this.chunk[aux.x][aux.z].push({
+        material: this.bloqueSeleccionado[this.objeto],
+        x: objetosIntersecados[0].coordenada.x,
+        y: objetosIntersecados[0].coordenada.y,
+        z: objetosIntersecados[0].coordenada.z
+      });
+      this.remove(this.mesh[this.bloqueSeleccionado[this.objeto]]);
+
+      let matrix = new THREE.Matrix4();
+      let l = 0;
+
+      this.mesh[this.bloqueSeleccionado[this.objeto]] = new THREE.InstancedMesh(
+        this.h.geometria,
+        this.materialesText[this.bloqueSeleccionado[this.objeto]],
+        ++this.sizeIMesh[this.bloqueSeleccionado[this.objeto]]
+      );
+      this.aplicarSombrasInstancedMesh(this.mesh[this.bloqueSeleccionado[this.objeto]]);
+
+      for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
+        for (let i = this.chunkMinMax.min.x; i <= this.chunkMinMax.max.x; i++) {
+          for (let j = 0; j < this.chunk[i][a].length; j++) {
+            if (this.chunk[i][a][j].material == this.bloqueSeleccionado[this.objeto]) {
+              matrix.setPosition(this.chunk[i][a][j].x, this.chunk[i][a][j].y, this.chunk[i][a][j].z);
+              this.mesh[this.bloqueSeleccionado[this.objeto]].setMatrixAt(l, matrix);
+              l++;
+            }
+          }
+        }
+      }
+
+      this.add(this.mesh[this.bloqueSeleccionado[this.objeto]]);
+    }
+  }
+
+  _clampCamDist(target, dir, desired) {
+    const MARGIN = 0.3;
+    const MIN_DIST = 2;
+    if (!this._springArmCaster) this._springArmCaster = new THREE.Raycaster();
+    this._springArmCaster.set(target, dir);
+    this._springArmCaster.near = 0.1;
+    this._springArmCaster.far = desired;
+    let safeDist = desired;
+    for (const tipo in this.mesh) {
+      const hits = this._springArmCaster.intersectObject(this.mesh[tipo], false);
+      if (hits.length > 0 && hits[0].distance < safeDist) {
+        safeDist = Math.max(MIN_DIST, hits[0].distance - MARGIN);
+      }
+    }
+    return safeDist;
+  }
+
   actualizarFeedback() {
     // Instancias reutilizadas entre frames — evitamos GC pressure: el
     // raycast se llama a 10Hz minimo (throttled abajo) pero igualmente
@@ -874,15 +895,31 @@ this.puntoscerdos = [];
     TWEEN.update();
     this.updateSunPosition();
 
-    // Se actualizan los elementos de la escena para cada frame
-    // Se actualiza la posición de la cámara según su controlador    
-    this.vector.subVectors(this.camera.position, this.cameraControl.target)
+    // Seguimiento del jugador: mantener la camara orbitando alrededor de la
+    // cabeza de Esteban sin perder la orientacion de la orbita actual.
+    const prevTarget = this.cameraControl.target.clone();
+    const prevOffset = this.camera.position.clone().sub(prevTarget);
+    const prevDist = prevOffset.length();
+    const prevDir = prevDist > 0 ? prevOffset.clone().divideScalar(prevDist) : new THREE.Vector3(0, 0.6, -0.8).normalize();
 
-    let valores = new THREE.Vector3(this.model.position.x, this.model.position.y + 36 / PM.PIXELES_ESTANDAR, this.model.position.z);
-    this.cameraControl.object.position.copy(valores).add(this.vector);
-    this.cameraControl.target.copy(valores);
+    const head = new THREE.Vector3(
+      this.model.position.x,
+      this.model.position.y + 36 / PM.PIXELES_ESTANDAR,
+      this.model.position.z
+    );
 
+    this.cameraControl.object.position.copy(head).addScaledVector(prevDir, this._cameraDesiredDist);
+    this.cameraControl.target.copy(head);
     this.cameraControl.update();
+
+    // Springarm: si hay terreno entre la cabeza y la camara, acercarla.
+    const postOffset = this.camera.position.clone().sub(head);
+    const postDist = postOffset.length();
+    const postDir = postDist > 0 ? postOffset.clone().divideScalar(postDist) : prevDir;
+    const safeDist = this._clampCamDist(head, postDir, this._cameraDesiredDist);
+    if (safeDist < postDist) {
+      this.camera.position.copy(head).addScaledVector(postDir, safeDist);
+    }
 
     // Le decimos al renderizador "visualiza la escena que te indico usando la cámara que te estoy pasando"
     this.renderer.render(this, this.getCamera());
@@ -1181,6 +1218,8 @@ window.addEventListener('DOMContentLoaded', function () {
 
   //----------------------------------------------------------------------------------------
   window.addEventListener("mousedown", (event) => scene.onDocumentMouseDown(event));
+  window.addEventListener("mouseup", (event) => scene.onDocumentMouseUp(event));
+  window.addEventListener("contextmenu", (event) => event.preventDefault());
   window.addEventListener("wheel", (event) => scene.onDocumentWheel(event));
   // Que no se nos olvide, la primera visualización.
   scene.update();
