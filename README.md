@@ -63,20 +63,23 @@ No bundler — browser resolves deps via `<script type="importmap">` in `index.h
 ## Structure
 
 ```
-index.html            Entry point (importmap + script tags + DOM)
-MyScene.js            Main scene, game loop, chunk system
-Cubo.js               Block type definitions (geometry + textures)
-Esteban.js            Player character
-Zombie.js             Zombie NPC
-Cerdo.js              Pig NPC
-estructuras.js        Composite structures (oak tree)
-colisiones.js         Collision detection
-ParametrosMundo.js    World constants
-texturas/             Block and GUI textures
-Dockerfile.dev/.prod  Docker images (dev node + prod nginx multi-stage)
-docker-compose*.yml   Compose definitions for dev y prod
-makefile              Shortcuts (make up / down / prod / clean)
-scripts/              Helpers (reset-node-modules.sh)
+index.html              Entry point (importmap + script tags + DOM)
+src/                    Application code (+ co-located *.test.js)
+  MyScene.js              Main scene, game loop, chunk system
+  Cubo.js                 Block type definitions (geometry + textures)
+  Esteban.js              Player character
+  Zombie.js               Zombie NPC
+  Cerdo.js                Pig NPC
+  estructuras.js          Composite structures (oak tree)
+  colisiones.js           Collision detection (uses aabb.js)
+  aabb.js                 Pure AABB intersection
+  chunkMath.js            Pure chunk math (identify, shift)
+  ParametrosMundo.js      World constants
+texturas/               Block and GUI textures
+Dockerfile.dev/.prod    Docker images (dev node + prod nginx multi-stage)
+docker-compose*.yml     Compose definitions for dev y prod
+makefile                Shortcuts (make up / down / prod / clean)
+scripts/                Helpers (reset-node-modules.sh)
 ```
 
 Runtime deps (`three`, `lil-gui`, `@tweenjs/tween.js`, `noisejs`) live in `node_modules/` via npm.

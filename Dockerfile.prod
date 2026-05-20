@@ -9,7 +9,7 @@ FROM nginx:alpine
 COPY --from=deps /build/node_modules /usr/share/nginx/html/node_modules
 COPY index.html /usr/share/nginx/html/
 COPY estilo.css /usr/share/nginx/html/
-COPY *.js /usr/share/nginx/html/
+COPY src /usr/share/nginx/html/src
 COPY texturas /usr/share/nginx/html/texturas
 
 EXPOSE 80

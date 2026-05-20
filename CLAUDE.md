@@ -34,17 +34,21 @@ Requires `npm install` first (deps en `node_modules/` servidas estáticamente).
 
 ## File map
 
+Todos los `.js` de aplicación viven en `src/`. Tests `*.test.js` viven junto al código fuente.
+
 | File | Role |
 | --- | --- |
-| `index.html` | Entry point. Loads scripts, defines DOM structure (WebGL output, tile bar, cursor) |
-| `MyScene.js` | God class. Extends `THREE.Scene`. Owns game loop (`update()`), chunk system, rendering, input handling, NPC orchestration |
-| `Cubo.js` | Block type classes: `Cubo` base, then `Hierba`, `Tierra`, `Piedra`, `Roca`, `MaderaRoble`, `PiedraBase`, `Cristal`, `PiedraLuminosa`, `HojaRoble` — each sets geometry + multi-material textures |
-| `Esteban.js` | Player character (humanoid mesh, physics, camera attachment, movement via key map) |
-| `Zombie.js` | NPC enemy — follows player, has bounding box for collision |
-| `Cerdo.js` | NPC pig — waypoint-based patrol, physics |
-| `estructuras.js` | Composite structures: `ArbolRoble` (oak tree) — arrays of block positions for trunk + leaves |
-| `colisiones.js` | Collision detection utilities |
-| `ParametrosMundo.js` | World constants. `PIXELES_ESTANDAR = 16` (pixels per block unit) |
+| `index.html` | Entry point (root). Importmap + script tags + DOM. Carga `src/MyScene.js` como módulo. |
+| `src/MyScene.js` | God class. Extends `THREE.Scene`. Owns game loop (`update()`), chunk system, rendering, input handling, NPC orchestration |
+| `src/Cubo.js` | Block type classes: `Cubo` base, then `Hierba`, `Tierra`, `Piedra`, `Roca`, `MaderaRoble`, `PiedraBase`, `Cristal`, `PiedraLuminosa`, `HojaRoble` — each sets geometry + multi-material textures |
+| `src/Esteban.js` | Player character (humanoid mesh, physics, camera attachment, movement via key map) |
+| `src/Zombie.js` | NPC enemy — follows player, has bounding box for collision |
+| `src/Cerdo.js` | NPC pig — waypoint-based patrol, physics |
+| `src/estructuras.js` | Composite structures: `generarArbolRoble` pure fn + `ArbolRoble` class wrapper |
+| `src/colisiones.js` | Collision detection — `Colisiones` class. Usa `aabb.js` para test AABB-AABB. |
+| `src/aabb.js` | AABB pure: `aabbIntersect`, `aabbFromCenter`. Sin Three.js. |
+| `src/chunkMath.js` | Chunk math pure: `identificarChunk`, `chunkToWorld`, `shiftMinMaxIfNeeded`. |
+| `src/ParametrosMundo.js` | World constants. `PIXELES_ESTANDAR = 16` (pixels per block unit) |
 
 ## Architecture — non-obvious decisions
 
