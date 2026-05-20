@@ -3,12 +3,6 @@ import * as THREE from 'three';
 import * as PM from './ParametrosMundo.js';
 import { resolveMovement, blockCentersToAABBs } from './voxelPhysics.js';
 
-// Bloques que NO bloquean el movimiento del personaje. Las hojas son
-// "atravesables" estilo Minecraft: el personaje pasa por ellas en lugar
-// de quedarse atrapado contra la copa de un arbol cuya altura coincide
-// con la suya.
-const PASSABLE_MATERIALS = new Set(['HojasRoble']);
-
 /**
  * Colisiones del personaje contra los bloques del mundo. La logica
  * detallada (axis-separated sweep, sub-stepping, snap por cara) vive en
@@ -70,8 +64,7 @@ class Colisiones {
       },
     };
 
-    const solidBlocks = bloques.filter((b) => !PASSABLE_MATERIALS.has(b.material));
-    const blockAABBs = blockCentersToAABBs(solidBlocks);
+    const blockAABBs = blockCentersToAABBs(bloques);
     const result = resolveMovement(playerAABB, moveDelta, blockAABBs);
 
     // Aplica posicion resultante al boundingBox y a personaje.position.
