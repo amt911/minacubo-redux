@@ -50,6 +50,7 @@ Romper `MyScene.js` (1105 líneas):
 - [ ] Event bus mini (mitt vendored o 20-line custom) en `libs/`
 - [ ] Clase base `NPC` + strategies (Follow, Patrol, Flee)
 - [ ] Convertir todos los archivos y código al inglés.
+- [ ] Mejorar el feedback del cubo que se va a crear/eliminar (ahora mismo es muy fino y tiene una linea en el cuadrado)
 
 ## Fase 4 — Features juego
 

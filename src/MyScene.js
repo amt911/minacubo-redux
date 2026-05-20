@@ -290,6 +290,11 @@ this.puntoscerdos = [];
     }
 
     for (let aux in this.mesh) {
+      // Cada bloque proyecta y recibe sombra del sol. HojasRoble podria
+      // saltarse castShadow para evitar sombras "manchadas" por la
+      // transparencia, pero por ahora mantenemos uniforme.
+      this.mesh[aux].castShadow = true;
+      this.mesh[aux].receiveShadow = true;
       this.add(this.mesh[aux]);
     }
 
@@ -407,24 +412,52 @@ this.puntoscerdos = [];
   }
 
   createLights() {
-    // Ambient: relleno generoso. Garantiza que cuando hemi+sun se atenuan
-    // por el ciclo dia/noche el mapa sigue visible en lugar de quedar negro.
-    let ambientLight = new THREE.AmbientLight(0xb0c4de, 0.45);
+    // Ambient: relleno bajo para dejar margen al contraste sun/sombra. Aun
+    // asi sostiene visibilidad cuando hemi+sun se acercan a cero por el
+    // ciclo dia/noche.
+    let ambientLight = new THREE.AmbientLight(0xb0c4de, 0.25);
     this.add(ambientLight);
 
-    // Hemisphere: cielo azul arriba, suelo calido marron abajo. Da el
-    // tinte natural segun la orientacion de la cara del bloque.
-    // Conservamos el nombre `spotLight` para que el ciclo dia/noche siga
-    // animando esta luz (intensity tweenada).
-    this.spotLight = new THREE.HemisphereLight(0x87CEEB, 0x4a3520, 0.6);
+    // Hemisphere: cielo azul arriba, suelo calido marron abajo. Tinte
+    // segun normal del bloque, complementa al sol direccional.
+    this.spotLight = new THREE.HemisphereLight(0x87CEEB, 0x4a3520, 0.45);
     this.spotLight.position.set(0, 60, 0);
     this.add(this.spotLight);
 
-    // DirectionalLight: el "sol". Diagonal para sombrear caras laterales
-    // distinto que el suelo. Sin shadows todavia (cost FPS).
-    this.sunLight = new THREE.DirectionalLight(0xfff4d6, 0.9);
+    // DirectionalLight = sol. Con shadowMap habilitado proyecta sombras
+    // duras de los cubos sobre el terreno. Sigue al jugador (ver
+    // updateSunPosition) para que el frustum ortografico nunca pierda la
+    // escena visible. Sin esto las sombras desaparecen al alejarse.
+    this.sunLight = new THREE.DirectionalLight(0xfff4d6, 1.1);
     this.sunLight.position.set(50, 100, 30);
+    this.sunLight.castShadow = true;
+    this.sunLight.shadow.mapSize.set(2048, 2048);
+
+    const shadowExtent = (this.TAM_CHUNK * this.DISTANCIA_RENDER) / 2 + 20;
+    const cam = this.sunLight.shadow.camera;
+    cam.left = -shadowExtent;
+    cam.right = shadowExtent;
+    cam.top = shadowExtent;
+    cam.bottom = -shadowExtent;
+    cam.near = 0.5;
+    cam.far = 300;
+    cam.updateProjectionMatrix();
+
+    this.sunLight.shadow.bias = -0.0005;
+
     this.add(this.sunLight);
+    this.add(this.sunLight.target);
+  }
+
+  // Mantiene el sol y su target centrados sobre el jugador. Sin esto el
+  // frustum ortografico del shadowMap, fijo en el espacio mundo, se queda
+  // atras y las sombras desaparecen al moverse.
+  updateSunPosition() {
+    if (!this.sunLight || !this.model) return;
+    const p = this.model.position;
+    this.sunLight.position.set(p.x + 50, p.y + 100, p.z + 30);
+    this.sunLight.target.position.set(p.x, p.y, p.z);
+    this.sunLight.target.updateMatrixWorld();
   }
 
   setLightIntensity(valor) {
@@ -440,7 +473,12 @@ this.puntoscerdos = [];
     // Se recibe el lienzo sobre el que se van a hacer los renderizados. Un div definido en el html.
 
     // Se instancia un Renderer   WebGL
-    let renderer = new THREE.WebGLRenderer();
+    let renderer = new THREE.WebGLRenderer({ antialias: true });
+
+    // Sombras: PCFSoft = blandas, mas caras que PCF basico pero las
+    // sombras de bloques quedan menos pixeladas.
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     // Se establece un color de fondo en las imágenes que genera el render
     renderer.setClearColor(new THREE.Color(0xEEEEEE), 1.0);
@@ -566,6 +604,8 @@ this.puntoscerdos = [];
         let l = 0;
 
         this.mesh[this.bloqueSeleccionado[this.objeto]] = new THREE.InstancedMesh(this.h.geometria, this.materialesText[this.bloqueSeleccionado[this.objeto]], ++this.sizeIMesh[this.bloqueSeleccionado[this.objeto]]);
+        this.mesh[this.bloqueSeleccionado[this.objeto]].castShadow = true;
+        this.mesh[this.bloqueSeleccionado[this.objeto]].receiveShadow = true;
 
         for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
           for (let i = this.chunkMinMax.min.x; i <= this.chunkMinMax.max.x; i++) {
@@ -685,6 +725,8 @@ this.puntoscerdos = [];
 
         let l = 0;
         this.mesh[objetosIntersecados[0].tipo] = new THREE.InstancedMesh(this.h.geometria, this.materialesText[objetosIntersecados[0].tipo], --this.sizeIMesh[objetosIntersecados[0].tipo]);
+        this.mesh[objetosIntersecados[0].tipo].castShadow = true;
+        this.mesh[objetosIntersecados[0].tipo].receiveShadow = true;
 
 
         for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
@@ -779,6 +821,7 @@ this.puntoscerdos = [];
     let delta=this.clock.getDelta();
 
     TWEEN.update();
+    this.updateSunPosition();
 
     // Se actualizan los elementos de la escena para cada frame
     // Se actualiza la posición de la cámara según su controlador    
@@ -827,6 +870,8 @@ this.puntoscerdos = [];
       for (let tipo in this.mesh) {
         this.remove(this.mesh[tipo]);
         this.mesh[tipo] = new THREE.InstancedMesh(this.h.geometria, this.materialesText[tipo], this.sizeIMesh[tipo]);
+        this.mesh[tipo].castShadow = true;
+        this.mesh[tipo].receiveShadow = true;
       }
 
 
