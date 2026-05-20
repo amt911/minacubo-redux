@@ -597,6 +597,42 @@ class MyScene extends THREE.Scene {
     this.sunLight.target.updateMatrixWorld();
   }
 
+  /**
+   * Compute block grid position from a raycast hit using face normal.
+   * Replaces the old materialIndex switch — works regardless of how groups
+   * are consolidated in the geometry.
+   *
+   * forRemoval=true  → center of the block that was hit (for removal / highlight).
+   * forRemoval=false → center of the adjacent block (for placement).
+   *
+   * Block centers: integer x,z and half-integer y (e.g. y=4.5).
+   */
+  _blockCenterFromHit(hit, forRemoval) {
+    const p = hit.point;
+    const n = hit.face.normal; // local = world: our blocks have no rotation
+    const sign = forRemoval ? -1 : 1;
+
+    if (Math.abs(n.x) > 0.5) {
+      return {
+        x: p.x + n.x * 0.5 * sign,
+        y: Math.floor(p.y) + 0.5,
+        z: Math.round(p.z),
+      };
+    } else if (Math.abs(n.y) > 0.5) {
+      return {
+        x: Math.round(p.x),
+        y: p.y + n.y * 0.5 * sign,
+        z: Math.round(p.z),
+      };
+    } else {
+      return {
+        x: Math.round(p.x),
+        y: Math.floor(p.y) + 0.5,
+        z: p.z + n.z * 0.5 * sign,
+      };
+    }
+  }
+
   setLightIntensity(valor) {
     this.spotLight.intensity = valor * 0.3;
     this.sunLight.intensity = 0.5 + valor * 1.1;
@@ -675,68 +711,7 @@ class MyScene extends THREE.Scene {
         let objetos = raycaster.intersectObject(this.mesh[tipo], true);
 
         if (objetos[0] != undefined && objetos.length > 0 && objetos[0].distance <= 20) {
-          let index = objetos[0].face.materialIndex;
-          let posicion = objetos[0].point;
-          let coord = { x: 0, y: 0, z: 0 };
-
-          //IMPORTANTE REVISAR 0 Y 5 (LOS INCREMENTOS)
-          switch (index) {
-            case 0: //derecha (x pos)
-              coord = {
-                x: posicion.x - 0.5,
-                //y: Math.round(posicion.y)+0.5,
-                y: (posicion.y | 0) + 0.5,
-                z: Math.round(posicion.z)
-              }
-              break;
-            case 1: //izquierda (x neg)
-              coord = {
-                x: posicion.x + 0.5,
-                //y: Math.round(posicion.y)+0.5,
-                y: (posicion.y | 0) + 0.5,
-                z: Math.round(posicion.z)
-              }
-              break;
-            case 2: //arriba (y pos) ok
-              coord = {
-                x: Math.round(posicion.x),
-                y: posicion.y - 0.5,
-                z: Math.round(posicion.z)
-              }
-              break;
-            case 3: //abajo (y neg)
-              coord = {
-                x: Math.round(posicion.x),
-                y: posicion.y + 0.5,
-                z: Math.round(posicion.z)
-              }
-              break;
-            case 4: //frente (z pos)
-              coord = {
-                x: Math.round(posicion.x),
-                //y: Math.round(posicion.y)+0.5,
-                y: (posicion.y | 0) + 0.5,
-                z: posicion.z - 0.5
-              }
-              break;
-            case 5: //detras (z neg)
-              coord = {
-                x: Math.round(posicion.x),
-                //y: Math.round(posicion.y)+0.5,
-                y: (posicion.y | 0) + 0.5,
-                z: posicion.z + 0.5
-              }
-              break;
-          }
-
-          if (posicion.y < 0 && index != 3 && index != 2) {
-            coord.y = Math.floor(posicion.y) + 0.5;
-          }
-
-          let redondeo = Math.round(coord.y);
-
-          coord.y = (redondeo > coord.y) ? redondeo - 0.5 : redondeo + 0.5;
-
+          const coord = this._blockCenterFromHit(objetos[0], true);
           objetosIntersecados.push({ tipo: tipo, coordenada: coord, distancia: objetos[0].distance });
 
 
@@ -808,34 +783,7 @@ class MyScene extends THREE.Scene {
       let objetos = raycaster.intersectObject(this.mesh[tipo], true);
 
       if (objetos[0] != undefined && objetos.length > 0 && objetos[0].distance <= 20) {
-        let index = objetos[0].face.materialIndex;
-        let posicion = objetos[0].point;
-        let coord = { x: 0, y: 0, z: 0 };
-
-        switch (index) {
-          case 0: //derecha (x pos)
-            coord = { x: posicion.x + 0.5, y: (posicion.y | 0) + 0.5, z: Math.round(posicion.z) };
-            break;
-          case 1: //izquierda (x neg)
-            coord = { x: posicion.x - 0.5, y: (posicion.y | 0) + 0.5, z: Math.round(posicion.z) };
-            break;
-          case 2: //arriba (y pos)
-            coord = { x: Math.round(posicion.x), y: (posicion.y | 0) + 0.5, z: Math.round(posicion.z) };
-            break;
-          case 3: //abajo (y neg)
-            coord = { x: Math.round(posicion.x), y: (posicion.y | 0) - 0.5, z: Math.round(posicion.z) };
-            break;
-          case 4: //frente (z pos)
-            coord = { x: Math.round(posicion.x), y: (posicion.y | 0) + 0.5, z: posicion.z + 0.5 };
-            break;
-          case 5: //detras (z neg)
-            coord = { x: Math.round(posicion.x), y: (posicion.y | 0) + 0.5, z: posicion.z - 0.5 };
-            break;
-        }
-        if (posicion.y < 0) {
-          coord.y = Math.floor(posicion.y) + 0.5;
-        }
-
+        const coord = this._blockCenterFromHit(objetos[0], false);
         objetosIntersecados.push({ tipo: tipo, coordenada: coord, distancia: objetos[0].distance });
       }
     }
@@ -921,36 +869,8 @@ class MyScene extends THREE.Scene {
       if (!hit || hit.distance > 20) continue;
       if (bestHit && hit.distance >= bestHit.distance) continue;
 
-      const index = hit.face.materialIndex;
-      const posicion = hit.point;
-      let coord = { x: 0, y: 0, z: 0 };
-      switch (index) {
-        case 0: //derecha (x pos)
-          coord = { x: posicion.x - 0.5, y: (posicion.y | 0) + 0.5, z: Math.round(posicion.z) };
-          break;
-        case 1: //izquierda (x neg)
-          coord = { x: posicion.x + 0.5, y: (posicion.y | 0) + 0.5, z: Math.round(posicion.z) };
-          break;
-        case 2: //arriba (y pos)
-          coord = { x: Math.round(posicion.x), y: posicion.y - 0.5, z: Math.round(posicion.z) };
-          break;
-        case 3: //abajo (y neg)
-          coord = { x: Math.round(posicion.x), y: posicion.y + 0.5, z: Math.round(posicion.z) };
-          break;
-        case 4: //frente (z pos)
-          coord = { x: Math.round(posicion.x), y: (posicion.y | 0) + 0.5, z: posicion.z - 0.5 };
-          break;
-        case 5: //detras (z neg)
-          coord = { x: Math.round(posicion.x), y: (posicion.y | 0) + 0.5, z: posicion.z + 0.5 };
-          break;
-      }
-
-      if (posicion.y < 0 && index !== 3 && index !== 2) {
-        coord.y = Math.floor(posicion.y) + 0.5;
-      }
-
       bestHit = hit;
-      bestCoord = coord;
+      bestCoord = this._blockCenterFromHit(hit, true);
     }
 
     if (bestCoord) {
