@@ -352,14 +352,15 @@ class Esteban extends THREE.Object3D {
     if(moviendose)
       this.animacion(esForward, velocidadFinal);
 
-    // Antes Esteban aplicaba translateOnAxis(vectorDir, velocidadFinal) sobre
-    // personaje y boundingBox ANTES de chequear colisiones, y luego
-    // Colisiones.colisionesLateral parcheaba el resultado con un snap+
-    // translateOnAxis inverso que producia jitter. Ahora Colisiones.update
-    // recibe vectorDir + velocidad y aplica el movimiento entero pasando
-    // por el voxelPhysics axis-separated sweep — un solo punto de verdad
-    // para fisica + colision.
-    this.colisiones.update(bloques, this, this.boundingBox, teclasPulsadas, vectorDir, velocidad);
+    // vectorDir esta en LOCAL space del personaje (W = +Z local). Antes
+    // Esteban llamaba a this.translateOnAxis(vectorDir, ...), que aplica
+    // internamente la rotacion del Object3D para convertir el eje local a
+    // world space. Ahora que colisiones.update recibe el vector y lo trata
+    // como delta world, hay que rotarlo aqui o W deja de ser "hacia donde
+    // mira la camara" cuando la camara orbita (bug de desincronizacion
+    // teclado/camara reportado).
+    const worldDir = vectorDir.clone().applyQuaternion(this.quaternion);
+    this.colisiones.update(bloques, this, this.boundingBox, teclasPulsadas, worldDir, velocidad);
   }
 }
 
