@@ -95,6 +95,7 @@ class MyScene extends THREE.Scene {
     // la gui y el texto bajo el que se agruparán los controles de la interfaz que añada el modelo.
     this.model = new Esteban(this.gui, "Esteban");
     this.createCamera();
+    this.setupPointerLock();
 
     this.habilitarSombrasEnSubarbol(this.model);
     this.add(this.model);
@@ -429,13 +430,13 @@ this.puntoscerdos = [];
     let gui = new GUI();
 
     this.guiControls = {
-      // En el contexto de una función   this   alude a la función
       axisOnOff: true,
-      activarWireframe: true
+      activarWireframe: true,
+      shadowsEnabled: true,
+      shadowResolution: 1024,
     }
 
     let folder = gui.addFolder('Ayudas');
-
 
     folder.add(this.guiControls, 'axisOnOff')
       .name('Mostrar ejes : ')
@@ -444,7 +445,68 @@ this.puntoscerdos = [];
     folder.add(this.guiControls, 'activarWireframe')
       .name('Mostrar feedback (raycast a 10Hz)');
 
+    const graficos = gui.addFolder('Gráficos');
+
+    graficos.add(this.guiControls, 'shadowsEnabled')
+      .name('Sombras')
+      .onChange((v) => {
+        this.renderer.shadowMap.enabled = v;
+        this.sunLight.castShadow = v;
+        if (this.sunLight.shadow.map) {
+          this.sunLight.shadow.map.dispose();
+          this.sunLight.shadow.map = null;
+        }
+        this.renderer.shadowMap.needsUpdate = true;
+      });
+
+    graficos.add(this.guiControls, 'shadowResolution', { '512': 512, '1024': 1024, '2048': 2048 })
+      .name('Resolución sombras')
+      .onChange((v) => {
+        this.sunLight.shadow.mapSize.set(v, v);
+        if (this.sunLight.shadow.map) {
+          this.sunLight.shadow.map.dispose();
+          this.sunLight.shadow.map = null;
+        }
+      });
+
     return gui;
+  }
+
+  setupPointerLock() {
+    const canvas = this.renderer.domElement;
+    const SENSITIVITY = 0.002;
+
+    canvas.addEventListener('click', () => {
+      if (!document.pointerLockElement) canvas.requestPointerLock();
+    });
+
+    document.addEventListener('pointerlockchange', () => {
+      if (document.pointerLockElement === canvas) {
+        document.body.classList.add('pointer-locked');
+        // Sync angles from current camera–head offset so there's no jump.
+        const head = new THREE.Vector3(
+          this.model.position.x,
+          this.model.position.y + 36 / PM.PIXELES_ESTANDAR,
+          this.model.position.z
+        );
+        const offset = this.camera.position.clone().sub(head);
+        const len = offset.length() || 1;
+        this._camPhi = Math.acos(Math.max(-1, Math.min(1, offset.y / len)));
+        this._camTheta = Math.atan2(offset.x, offset.z);
+      } else {
+        document.body.classList.remove('pointer-locked');
+      }
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (document.pointerLockElement !== canvas) return;
+      this._camTheta -= e.movementX * SENSITIVITY;
+      this._camPhi -= e.movementY * SENSITIVITY;
+      this._camPhi = Math.max(
+        this.cameraControl.minPolarAngle,
+        Math.min(this.cameraControl.maxPolarAngle, this._camPhi)
+      );
+    });
   }
 
   createLights() {
@@ -901,28 +963,44 @@ this.puntoscerdos = [];
     TWEEN.update();
     this.updateSunPosition();
 
-    // Seguimiento del jugador: mantener la camara orbitando alrededor de la
-    // cabeza de Esteban sin perder la orientacion de la orbita actual.
-    const prevTarget = this.cameraControl.target.clone();
-    const prevOffset = this.camera.position.clone().sub(prevTarget);
-    const prevDist = prevOffset.length();
-    const prevDir = prevDist > 0 ? prevOffset.clone().divideScalar(prevDist) : new THREE.Vector3(0, 0.6, -0.8).normalize();
-
     const head = new THREE.Vector3(
       this.model.position.x,
       this.model.position.y + 36 / PM.PIXELES_ESTANDAR,
       this.model.position.z
     );
 
-    this.cameraControl.object.position.copy(head).addScaledVector(prevDir, this._cameraDesiredDist);
-    this.cameraControl.target.copy(head);
-    this.cameraControl.update();
+    const isLocked = document.pointerLockElement === this.renderer.domElement;
+
+    if (isLocked) {
+      // Pointer-lock mode: drive camera directly from _camTheta/_camPhi angles.
+      // Skip cameraControl.update() — it would override the position we set.
+      const phi = this._camPhi ?? Math.PI * 0.3;
+      const theta = this._camTheta ?? 0;
+      const offset = new THREE.Vector3(
+        Math.sin(phi) * Math.sin(theta),
+        Math.cos(phi),
+        Math.sin(phi) * Math.cos(theta)
+      ).multiplyScalar(this._cameraDesiredDist);
+      this.camera.position.copy(head).add(offset);
+      this.camera.lookAt(head);
+      this.cameraControl.target.copy(head);
+    } else {
+      // OrbitControls mode: follow player head, preserve current orbit direction.
+      const prevTarget = this.cameraControl.target.clone();
+      const prevOffset = this.camera.position.clone().sub(prevTarget);
+      const prevDist = prevOffset.length();
+      const prevDir = prevDist > 0 ? prevOffset.clone().divideScalar(prevDist) : new THREE.Vector3(0, 0.6, -0.8).normalize();
+
+      this.cameraControl.object.position.copy(head).addScaledVector(prevDir, this._cameraDesiredDist);
+      this.cameraControl.target.copy(head);
+      this.cameraControl.update();
+    }
 
     // Springarm: si hay terreno entre la cabeza y la camara, acercarla.
     // Throttled a cada 3 frames — la camara no cambia radicalmente en 1 frame.
     const postOffset = this.camera.position.clone().sub(head);
     const postDist = postOffset.length();
-    const postDir = postDist > 0 ? postOffset.clone().divideScalar(postDist) : prevDir;
+    const postDir = postDist > 0 ? postOffset.clone().divideScalar(postDist) : new THREE.Vector3(0, 0.6, -0.8).normalize();
     if (!this._springArmFrame) this._springArmFrame = 0;
     this._springArmFrame++;
     if (this._springArmFrame % 3 === 0 || this._springArmCachedDist === undefined) {
@@ -1199,28 +1277,31 @@ window.addEventListener('DOMContentLoaded', function () {
   // Se añaden los listener de la aplicación. En este caso, el que va a comprobar cuándo se modifica el tamaño de la ventana de la aplicación.
   window.addEventListener("resize", () => scene.onWindowResize());
 
+  const clearAllKeys = () => {
+    for (const k in scene.mapTeclas) scene.mapTeclas[k] = false;
+    scene.model.resetPosicion();
+  };
+
   window.addEventListener("keydown", (event) => {
-    let tecla = event.key.toUpperCase();
-
-    scene.mapTeclas[tecla] = true;
+    scene.mapTeclas[event.key.toUpperCase()] = true;
   });
-
 
   window.addEventListener("keyup", (event) => {
     scene.mapTeclas[event.key.toUpperCase()] = false;
-
-    event.stopImmediatePropagation()
+    event.stopImmediatePropagation();
 
     let allFalse = true;
-
     for (let aux in scene.mapTeclas) {
-      if (scene.mapTeclas[aux])
-        allFalse = false;
+      if (scene.mapTeclas[aux]) allFalse = false;
     }
+    if (allFalse) scene.model.resetPosicion();
+  });
 
-    if (allFalse) {
-      scene.model.resetPosicion()
-    }
+  // Clear keys when window loses focus — prevents stuck WASD after alt-tab
+  // or after pointer-capture (right-drag) swallows keyup events.
+  window.addEventListener("blur", clearAllKeys);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) clearAllKeys();
   });
 
   //----------------------------------------------------------------------------------------

@@ -281,8 +281,16 @@ class Esteban extends THREE.Object3D {
   update(bloques, teclasPulsadas) {
     let delta= this.clock.getDelta();
     let velocidad = delta * 4.317;
-    this.cabezaW1.rotation.x = Math.PI / 2 - this.cameraControls.getPolarAngle();
-    this.rotation.y = - Math.PI + this.cameraControls.getAzimuthalAngle();
+    // Derive orientation from camera geometry — works regardless of whether
+    // OrbitControls or pointer-lock mode is driving the camera.
+    const cp = this.cameraControls.object.position;
+    const ct = this.cameraControls.target;
+    const dx = cp.x - ct.x;
+    const dy = cp.y - ct.y;
+    const dz = cp.z - ct.z;
+    const dxz = Math.sqrt(dx * dx + dz * dz);
+    this.cabezaW1.rotation.x = Math.PI / 2 - Math.atan2(dxz, dy);
+    this.rotation.y = Math.atan2(-dx, -dz);
     this.boundingBox.rotation.y = - Math.PI + this.cameraControls.getAzimuthalAngle();
 
 
