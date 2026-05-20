@@ -23,15 +23,18 @@ Roadmap para robustez (Docker, tests, TDD) y mejoras de juego.
 
 - [x] Usar npm para los paquetes, ahora mismo están copiados a lo cutre
 - [ ] Mejorar la lógica por completo de colisiones. Ahora mismo va muy mal (si se pone debajo de un árbol y se salta se sube automáticamente a la copa, si se colisiona contra un cubo y se sigue andando tiembla, etc)
-- [ ] Extraer AABB de `colisiones.js` a función pura testable
-- [ ] Escribir `colisiones.test.js` (overlap total, tangente, eje único, sin overlap)
-- [ ] Tests `ParametrosMundo.js` (snapshot constantes)
-- [ ] Extraer `ArbolRoble` a función pura → `estructuras.test.js` (shape, conteo tronco/hojas)
-- [ ] Extraer `chunkMath.js` de `MyScene.js` (identificarChunk, world↔chunk coords)
-- [ ] Tests `chunkMath` (bordes, negativos, midpoint shift)
+- [ ] Mejorar la iluminación, ahora mismo es plana.
+- [ ] Revisar el algoritmo de ruido perlin y usar mejor un paquete npm.
+- [x] Extraer AABB de `colisiones.js` a función pura testable
+- [x] Escribir `colisiones.test.js` (overlap total, tangente, eje único, sin overlap)
+- [x] Tests `ParametrosMundo.js` (snapshot constantes)
+- [x] Extraer `ArbolRoble` a función pura → `estructuras.test.js` (shape, conteo tronco/hojas)
+- [x] Extraer `chunkMath.js` de `MyScene.js` (identificarChunk, world↔chunk coords)
+- [x] Tests `chunkMath` (bordes, negativos, midpoint shift)
 - [ ] Seed determinista Perlin (param opcional, fallback random)
 - [ ] Tests terrain con seed fijo (snapshot heightmap)
 - [ ] Hacer el feedback muchísimo más eficiente para que esté siempre activo y no consuma tantos recursos.
+- [ ] Mejorar la distribución de los archivos, ahora mismo están todos al tuntún.
 
 ## Fase 3 — Refactor god class
 
@@ -58,6 +61,7 @@ Romper `MyScene.js` (1105 líneas):
 - [ ] Cuevas con Perlin 3D (huecos en terreno)
 - [ ] Iluminación dinámica antorchas + `PiedraLuminosa` (PointLight)
 - [ ] Controles touch/mobile (joystick virtual + botones)
+- [ ] Ver alguna forma de hostearlo (quizás con vercel)
 
 ## Fase 5 — Performance
 
