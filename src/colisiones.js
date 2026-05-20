@@ -28,7 +28,17 @@ class Colisiones {
     }
 
 colisionesSuelo(bloques, personaje, boundingBox) {
+    // Solo bloques POR DEBAJO de los pies cuentan como suelo. Sin este
+    // filtro, las hojas de un arbol justo arriba podian intersectar el
+    // boundingBox al saltar y "snapeaban" al personaje a la copa.
+    const playerFeetY = personaje.position.y - personaje.altura / PM.PIXELES_ESTANDAR / 2;
+
     for (let i = 0; i < bloques.length; i++) {
+            const blockTop = bloques[i].y + 0.5;
+            // Tolerancia 0.6: permite escalar un bloque normal pero no saltar
+            // ~2 bloques de altura como atajo.
+            if (blockTop > playerFeetY + 0.6) continue;
+
             let bV = new THREE.Vector2(bloques[i].x, bloques[i].z);
             let eV = new THREE.Vector2(personaje.position.x, personaje.position.z);
 
@@ -36,7 +46,7 @@ colisionesSuelo(bloques, personaje, boundingBox) {
                 this.bloqueRaro.position.set(bloques[i].x, bloques[i].y, bloques[i].z);
                 if (this.detectCollisionCharacterWorld(this.bloqueRaro, boundingBox)) {
                     personaje.position.y = bloques[i].y + personaje.altura / PM.PIXELES_ESTANDAR / 2 - 0.5;
-                    boundingBox.position.y = personaje.position.y + (personaje.altura/2) / PM.PIXELES_ESTANDAR;                        
+                    boundingBox.position.y = personaje.position.y + (personaje.altura/2) / PM.PIXELES_ESTANDAR;
                     this.caidaVel = 0;
                     personaje.puedeSaltar = true;
 
@@ -72,13 +82,15 @@ colisionesLateral(bloques, vector, velocidad, personaje, boundingBox) {
                             valor = -valor;
                         }
                         personaje.position.z = bloques[i].z + valor;
-                        boundingBox.position.z = bloques[i].z + valor;                           
+                        boundingBox.position.z = bloques[i].z + valor;
                     }
 
-                    let aux = new THREE.Vector3(-vector.x, -vector.y, -vector.z)
-                    personaje.translateOnAxis(aux.normalize(), velocidad);
-
-                    boundingBox.translateOnAxis(aux, velocidad);
+                    // No aplicamos translateOnAxis al reves. El snap anterior
+                    // ya saca al personaje del bloque; al moverlo ademas hacia
+                    // atras se producia jitter: cada frame el input lo empujaba
+                    // al bloque, el snap lo movia fuera, el translate lo movia
+                    // mas atras todavia → temblor visible al chocar y seguir
+                    // andando.
                 }
             }
         }
