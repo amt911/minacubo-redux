@@ -384,7 +384,13 @@ this.puntoscerdos = [];
     this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
     this.camera.position.set(this.model.position.x, this.model.position.y + 10, this.model.position.z - 10);
 
+    // Pre-allocated vectors reused every frame — eliminate per-frame GC pressure.
     this.vector = new THREE.Vector3();
+    this._v3A = new THREE.Vector3();
+    this._v3B = new THREE.Vector3();
+    this._v3C = new THREE.Vector3();
+    this._v3Head = new THREE.Vector3();
+
     this.cameraControl = new OrbitControls(this.camera, this.renderer.domElement);
     this.cameraControl.target.set(this.model.position.x, this.model.position.y, this.model.position.z)
     this.cameraControl.enablePan = false;
@@ -434,6 +440,7 @@ this.puntoscerdos = [];
       activarWireframe: true,
       shadowsEnabled: true,
       shadowResolution: 1024,
+      cameraSensitivity: 1.0,
     }
 
     let folder = gui.addFolder('Ayudas');
@@ -469,12 +476,14 @@ this.puntoscerdos = [];
         }
       });
 
+    graficos.add(this.guiControls, 'cameraSensitivity', 0.1, 3.0, 0.05)
+      .name('Sensibilidad cámara');
+
     return gui;
   }
 
   setupPointerLock() {
     const canvas = this.renderer.domElement;
-    const SENSITIVITY = 0.002;
 
     canvas.addEventListener('click', () => {
       if (!document.pointerLockElement) canvas.requestPointerLock();
@@ -500,8 +509,9 @@ this.puntoscerdos = [];
 
     document.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement !== canvas) return;
-      this._camTheta -= e.movementX * SENSITIVITY;
-      this._camPhi -= e.movementY * SENSITIVITY;
+      const s = 0.002 * this.guiControls.cameraSensitivity;
+      this._camTheta -= e.movementX * s;
+      this._camPhi -= e.movementY * s;
       this._camPhi = Math.max(
         this.cameraControl.minPolarAngle,
         Math.min(this.cameraControl.maxPolarAngle, this._camPhi)
@@ -536,10 +546,10 @@ this.puntoscerdos = [];
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.set(1024, 1024);
 
-    // Frustum ortografico generoso para que las sombras alargadas (ahora
-    // hasta ~2 bloques de longitud por cubo) no queden cortadas en el
-    // borde del area visible.
-    const shadowExtent = this.TAM_CHUNK * this.DISTANCIA_RENDER;
+    // Frustum orto centrado en el jugador (updateSunPosition lo desplaza).
+    // 25 unidades cubre ~5 chunks alrededor del jugador — suficiente para
+    // sombras visibles sin renderizar todo el mundo visible en el shadow pass.
+    const shadowExtent = 25;
     const cam = this.sunLight.shadow.camera;
     cam.left = -shadowExtent;
     cam.right = shadowExtent;
@@ -963,7 +973,8 @@ this.puntoscerdos = [];
     TWEEN.update();
     this.updateSunPosition();
 
-    const head = new THREE.Vector3(
+    // Reuse pre-allocated vectors — no per-frame allocation or GC.
+    const head = this._v3Head.set(
       this.model.position.x,
       this.model.position.y + 36 / PM.PIXELES_ESTANDAR,
       this.model.position.z
@@ -976,20 +987,22 @@ this.puntoscerdos = [];
       // Skip cameraControl.update() — it would override the position we set.
       const phi = this._camPhi ?? Math.PI * 0.3;
       const theta = this._camTheta ?? 0;
-      const offset = new THREE.Vector3(
+      this._v3A.set(
         Math.sin(phi) * Math.sin(theta),
         Math.cos(phi),
         Math.sin(phi) * Math.cos(theta)
       ).multiplyScalar(this._cameraDesiredDist);
-      this.camera.position.copy(head).add(offset);
+      this.camera.position.copy(head).add(this._v3A);
       this.camera.lookAt(head);
       this.cameraControl.target.copy(head);
     } else {
       // OrbitControls mode: follow player head, preserve current orbit direction.
-      const prevTarget = this.cameraControl.target.clone();
-      const prevOffset = this.camera.position.clone().sub(prevTarget);
-      const prevDist = prevOffset.length();
-      const prevDir = prevDist > 0 ? prevOffset.clone().divideScalar(prevDist) : new THREE.Vector3(0, 0.6, -0.8).normalize();
+      this._v3A.copy(this.cameraControl.target);                     // prevTarget
+      this._v3B.copy(this.camera.position).sub(this._v3A);           // prevOffset
+      const prevDist = this._v3B.length();
+      const prevDir = prevDist > 0
+        ? this._v3C.copy(this._v3B).divideScalar(prevDist)
+        : this._v3C.set(0, 0.6, -0.8).normalize();
 
       this.cameraControl.object.position.copy(head).addScaledVector(prevDir, this._cameraDesiredDist);
       this.cameraControl.target.copy(head);
@@ -998,9 +1011,11 @@ this.puntoscerdos = [];
 
     // Springarm: si hay terreno entre la cabeza y la camara, acercarla.
     // Throttled a cada 3 frames — la camara no cambia radicalmente en 1 frame.
-    const postOffset = this.camera.position.clone().sub(head);
-    const postDist = postOffset.length();
-    const postDir = postDist > 0 ? postOffset.clone().divideScalar(postDist) : new THREE.Vector3(0, 0.6, -0.8).normalize();
+    this._v3A.copy(this.camera.position).sub(head);                  // postOffset
+    const postDist = this._v3A.length();
+    const postDir = postDist > 0
+      ? this._v3B.copy(this._v3A).divideScalar(postDist)
+      : this._v3B.set(0, 0.6, -0.8).normalize();
     if (!this._springArmFrame) this._springArmFrame = 0;
     this._springArmFrame++;
     if (this._springArmFrame % 3 === 0 || this._springArmCachedDist === undefined) {
