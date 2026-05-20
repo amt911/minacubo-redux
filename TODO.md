@@ -65,6 +65,9 @@ Romper `MyScene.js` (1105 líneas):
 - [ ] Iluminación dinámica antorchas + `PiedraLuminosa` (PointLight)
 - [ ] Controles touch/mobile (joystick virtual + botones)
 - [ ] Ver alguna forma de hostearlo (quizás con vercel)
+- [ ] Ajustes de gráficos del juego
+- [ ] Añadir generador de niveles como en minecraft
+- [ ] Añadir fisica de agua.
 
 ## Fase 5 — Performance
 

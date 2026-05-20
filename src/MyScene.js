@@ -295,6 +295,10 @@ this.puntoscerdos = [];
       // transparencia, pero por ahora mantenemos uniforme.
       this.mesh[aux].castShadow = true;
       this.mesh[aux].receiveShadow = true;
+      // InstancedMesh no actualiza el boundingSphere al cambiar matrices,
+      // asi que su frustum culling puede excluir el mesh tanto del render
+      // principal como del shadow pass. Forzamos render siempre.
+      this.mesh[aux].frustumCulled = false;
       this.add(this.mesh[aux]);
     }
 
@@ -429,21 +433,29 @@ this.puntoscerdos = [];
     // updateSunPosition) para que el frustum ortografico nunca pierda la
     // escena visible. Sin esto las sombras desaparecen al alejarse.
     this.sunLight = new THREE.DirectionalLight(0xfff4d6, 1.1);
-    this.sunLight.position.set(50, 100, 30);
+    // Offset bajo y lateral: angulo ~35° desde horizontal → sombras LARGAS
+    // y bien visibles. Posicion (90,0) vertical 60° con sun alto producia
+    // sombras minusculas (longitud ~0.5 bloques).
+    this._sunOffset = new THREE.Vector3(60, 50, 20);
+    this.sunLight.position.copy(this._sunOffset);
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.set(2048, 2048);
 
-    const shadowExtent = (this.TAM_CHUNK * this.DISTANCIA_RENDER) / 2 + 20;
+    // Frustum ortografico generoso para que las sombras alargadas (ahora
+    // hasta ~2 bloques de longitud por cubo) no queden cortadas en el
+    // borde del area visible.
+    const shadowExtent = this.TAM_CHUNK * this.DISTANCIA_RENDER;
     const cam = this.sunLight.shadow.camera;
     cam.left = -shadowExtent;
     cam.right = shadowExtent;
     cam.top = shadowExtent;
     cam.bottom = -shadowExtent;
     cam.near = 0.5;
-    cam.far = 300;
+    cam.far = 500;
     cam.updateProjectionMatrix();
 
     this.sunLight.shadow.bias = -0.0005;
+    this.sunLight.shadow.normalBias = 0.05;
 
     this.add(this.sunLight);
     this.add(this.sunLight.target);
@@ -455,7 +467,8 @@ this.puntoscerdos = [];
   updateSunPosition() {
     if (!this.sunLight || !this.model) return;
     const p = this.model.position;
-    this.sunLight.position.set(p.x + 50, p.y + 100, p.z + 30);
+    const o = this._sunOffset;
+    this.sunLight.position.set(p.x + o.x, p.y + o.y, p.z + o.z);
     this.sunLight.target.position.set(p.x, p.y, p.z);
     this.sunLight.target.updateMatrixWorld();
   }
@@ -606,6 +619,7 @@ this.puntoscerdos = [];
         this.mesh[this.bloqueSeleccionado[this.objeto]] = new THREE.InstancedMesh(this.h.geometria, this.materialesText[this.bloqueSeleccionado[this.objeto]], ++this.sizeIMesh[this.bloqueSeleccionado[this.objeto]]);
         this.mesh[this.bloqueSeleccionado[this.objeto]].castShadow = true;
         this.mesh[this.bloqueSeleccionado[this.objeto]].receiveShadow = true;
+        this.mesh[this.bloqueSeleccionado[this.objeto]].frustumCulled = false;
 
         for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
           for (let i = this.chunkMinMax.min.x; i <= this.chunkMinMax.max.x; i++) {
@@ -727,6 +741,7 @@ this.puntoscerdos = [];
         this.mesh[objetosIntersecados[0].tipo] = new THREE.InstancedMesh(this.h.geometria, this.materialesText[objetosIntersecados[0].tipo], --this.sizeIMesh[objetosIntersecados[0].tipo]);
         this.mesh[objetosIntersecados[0].tipo].castShadow = true;
         this.mesh[objetosIntersecados[0].tipo].receiveShadow = true;
+        this.mesh[objetosIntersecados[0].tipo].frustumCulled = false;
 
 
         for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
@@ -872,6 +887,7 @@ this.puntoscerdos = [];
         this.mesh[tipo] = new THREE.InstancedMesh(this.h.geometria, this.materialesText[tipo], this.sizeIMesh[tipo]);
         this.mesh[tipo].castShadow = true;
         this.mesh[tipo].receiveShadow = true;
+        this.mesh[tipo].frustumCulled = false;
       }
 
 
