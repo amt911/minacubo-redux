@@ -13,6 +13,11 @@ function isOnTree(x, z, list) {
 }
 
 export class ChunkManager {
+  // Generate (and keep meshed) one chunk beyond the visible window in every
+  // direction. Avoids the "wait for worker + mesh build" lag when the player
+  // crosses a chunk boundary — the next chunk is already loaded.
+  static PRELOAD_RING = 1;
+
   /**
    * @param {{
    *   TAM_CHUNK: number,
@@ -53,7 +58,7 @@ export class ChunkManager {
     // Avoids freezing the main thread when many chunks finish at once.
     /** @type {Array<{chunkX:number, chunkZ:number}>} */
     this._meshQueue = [];
-    this._maxMeshBuildsPerFrame = 2;
+    this._maxMeshBuildsPerFrame = 4;
 
     // Override shared geometry boundingSphere for per-chunk frustum culling.
     // See _createChunkMaterialMesh — mesh.position is set per chunk, this
@@ -267,9 +272,13 @@ export class ChunkManager {
       pigWaypoints.push({ x: px, y: py, z: pz });
     }
 
-    // Queue worker gen for every other chunk in the initial window.
-    for (let i = 0; i < DR; i++) {
-      for (let j = 0; j < DR; j++) {
+    // Queue worker gen for every other chunk in the initial window + a
+    // PRELOAD_RING outside it. The ring chunks aren't visible (frustum-culled)
+    // but their data + mesh is ready before the player scrolls into them, so
+    // a chunk-boundary crossing is seamless.
+    const R = ChunkManager.PRELOAD_RING;
+    for (let i = -R; i < DR + R; i++) {
+      for (let j = -R; j < DR + R; j++) {
         if (i === 0 && j === 0) continue;
         this._genChunkAsync(i, j).then((blocks) => {
           this._storeChunkData(i, j, blocks);
@@ -289,11 +298,12 @@ export class ChunkManager {
    */
   tick() {
     let count = 0;
+    const R = ChunkManager.PRELOAD_RING;
     while (count < this._maxMeshBuildsPerFrame && this._meshQueue.length > 0) {
       const { chunkX, chunkZ } = this._meshQueue.shift();
-      // Skip if chunk no longer in window (was disposed during scroll).
+      // Skip if chunk fell outside the preloaded range during scroll.
       const { min, max } = this.chunkMinMax;
-      if (chunkX < min.x || chunkX > max.x || chunkZ < min.z || chunkZ > max.z) continue;
+      if (chunkX < min.x - R || chunkX > max.x + R || chunkZ < min.z - R || chunkZ > max.z + R) continue;
       this._buildChunkMesh(chunkX, chunkZ);
       count++;
     }
@@ -323,24 +333,23 @@ export class ChunkManager {
 
     if (!moved) return false;
 
-    // Dispose meshes for chunks that left the window.
-    for (let a = oldMinZ; a <= oldMaxZ; a++) {
-      for (let i = oldMinX; i <= oldMaxX; i++) {
-        if (i < min.x || i > max.x || a < min.z || a > max.z) {
+    // Dispose chunks that fell outside the (new window + preload ring).
+    const R = ChunkManager.PRELOAD_RING;
+    for (let a = oldMinZ - R; a <= oldMaxZ + R; a++) {
+      for (let i = oldMinX - R; i <= oldMaxX + R; i++) {
+        if (i < min.x - R || i > max.x + R || a < min.z - R || a > max.z + R) {
           this._disposeChunkMesh(i, a);
         }
       }
     }
 
-    // For each chunk in the new window: ensure data + queue mesh build.
-    for (let a = min.z; a <= max.z; a++) {
-      for (let i = min.x; i <= max.x; i++) {
+    // Ensure every chunk inside (new window + preload ring) has data + mesh.
+    for (let a = min.z - R; a <= max.z + R; a++) {
+      for (let i = min.x - R; i <= max.x + R; i++) {
         if (this.chunkMeshes[i]?.[a]) continue; // already rendered
         if (this.chunk[i]?.[a]) {
-          // Data already exists (player walked back) — queue mesh rebuild.
           this._meshQueue.push({ chunkX: i, chunkZ: a });
         } else {
-          // Need fresh data from worker.
           this._genChunkAsync(i, a).then((blocks) => {
             this._storeChunkData(i, a, blocks);
             this._meshQueue.push({ chunkX: i, chunkZ: a });
