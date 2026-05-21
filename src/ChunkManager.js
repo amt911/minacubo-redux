@@ -317,15 +317,23 @@ export class ChunkManager {
 
   /**
    * Collect blocks for collision detection around a chunk position.
+   * Push individual blocks into a single array — avoids per-chunk array
+   * allocation from concat().
    * @param {{x:number,z:number}} chunkPos
    * @param {number} radius chunk radius
    */
   getCollisionsAround(chunkPos, radius) {
-    let result = [];
+    const result = [];
     const r = Math.floor(radius / 2);
-    for (let i = Math.floor(chunkPos.x - r); i <= Math.floor(chunkPos.x + r); i++) {
-      for (let j = Math.floor(chunkPos.z - r); j <= Math.floor(chunkPos.z + r); j++) {
-        if (this.chunk[i]?.[j]) result = result.concat(this.chunk[i][j]);
+    const cx = Math.floor(chunkPos.x);
+    const cz = Math.floor(chunkPos.z);
+    for (let i = cx - r; i <= cx + r; i++) {
+      const col = this.chunk[i];
+      if (!col) continue;
+      for (let j = cz - r; j <= cz + r; j++) {
+        const blocks = col[j];
+        if (!blocks) continue;
+        for (let k = 0; k < blocks.length; k++) result.push(blocks[k]);
       }
     }
     return result;

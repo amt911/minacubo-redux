@@ -157,10 +157,10 @@ class MyScene extends THREE.Scene {
     );
     this.add(this.pig);
 
-    // Thin edge fog — hides chunk pop-in at render boundary.
-    // Starts 0.5 chunks before the visible edge, ends 1 chunk beyond it.
-    const fogNear = this.TAM_CHUNK * (this.DISTANCIA_RENDER / 2 - 0.5);
-    const fogFar  = this.TAM_CHUNK * (this.DISTANCIA_RENDER / 2 + 1);
+    // Edge fog — hides chunk pop-in well inside the render window.
+    // Starts 2 chunks before the visible edge, fully opaque 0.5 chunks before it.
+    const fogNear = this.TAM_CHUNK * (this.DISTANCIA_RENDER / 2 - 2);
+    const fogFar  = this.TAM_CHUNK * (this.DISTANCIA_RENDER / 2 - 0.5);
     this.fog = new THREE.Fog(0x87CEEB, fogNear, fogFar);
     this.background = new THREE.Color(0x87CEEB);
 
@@ -199,7 +199,6 @@ class MyScene extends THREE.Scene {
       chunkManager:     this.chunkManager,
       getPlayerPosition: () => this.model.position,
       TAM_CHUNK:        this.TAM_CHUNK,
-      DISTANCIA_RENDER: this.DISTANCIA_RENDER,
     });
   }
 
@@ -582,7 +581,7 @@ class MyScene extends THREE.Scene {
       : this._v3B.set(0, 0.6, -0.8).normalize();
     if (!this._springArmFrame) this._springArmFrame = 0;
     this._springArmFrame++;
-    if (this._springArmFrame % 3 === 0 || this._springArmCachedDist === undefined) {
+    if (this._springArmFrame % 5 === 0 || this._springArmCachedDist === undefined) {
       this._springArmCachedDist = this._clampCamDist(head, postDir, this._cameraDesiredDist);
     }
     if (this._springArmCachedDist < postDist) {
