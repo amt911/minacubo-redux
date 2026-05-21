@@ -78,7 +78,6 @@ export class ChunkManager {
     for (let i = 0; i < WORKER_COUNT; i++) {
       const w = new Worker(new URL('./chunkWorker.js', import.meta.url), { type: 'module' });
       w.onmessage = (e) => this._onWorkerMessage(e);
-      w.postMessage({ type: 'init', seed: this.seed });
       this._workers.push(w);
     }
   }
@@ -97,7 +96,7 @@ export class ChunkManager {
       this._pendingChunks.set(id, resolve);
       const worker = this._workers[this._workerIdx];
       this._workerIdx = (this._workerIdx + 1) % this._workers.length;
-      worker.postMessage({ type: 'gen', id, chunkX, chunkZ, TC: this.TAM_CHUNK });
+      worker.postMessage({ type: 'gen', id, chunkX, chunkZ, TC: this.TAM_CHUNK, seed: this.seed });
     });
   }
 

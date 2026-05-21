@@ -42,21 +42,26 @@ function terrainHeight(noiseFn, x, z) {
   return Math.round(4 + detail + hills + mountains);
 }
 
+// Seed is sent with every gen task so we don't depend on an init-then-gen
+// message ordering — top-level await can lead to messages arriving before
+// `self.onmessage` is attached, so a separate init message could race.
 let getHeight = null;
 
 self.onmessage = (e) => {
   const data = e.data;
-  if (data.type === 'init') {
+  if (data.type !== 'gen') return;
+
+  if (!getHeight) {
     const base = createNoise2D(mulberry32(data.seed));
     getHeight = (x, z) => terrainHeight(base, x, z);
-  } else if (data.type === 'gen') {
-    const r = generateChunkBlocks(getHeight, data.chunkX, data.chunkZ, data.TC);
-    self.postMessage({
-      type: 'result',
-      id: data.id,
-      chunkX: data.chunkX,
-      chunkZ: data.chunkZ,
-      blocks: r.blocks,
-    });
   }
+
+  const r = generateChunkBlocks(getHeight, data.chunkX, data.chunkZ, data.TC);
+  self.postMessage({
+    type: 'result',
+    id: data.id,
+    chunkX: data.chunkX,
+    chunkZ: data.chunkZ,
+    blocks: r.blocks,
+  });
 };
