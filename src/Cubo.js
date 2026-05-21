@@ -32,7 +32,7 @@ class Block {
   constructor() {
     this.geometria = new THREE.BoxGeometry(16/PM.PIXELES_ESTANDAR, 16/PM.PIXELES_ESTANDAR, 16/PM.PIXELES_ESTANDAR);
     /** @type {THREE.Material | THREE.Material[]} */
-    this.material = new THREE.MeshPhongMaterial({color: 0xCF0000});
+    this.material = new THREE.MeshLambertMaterial({color: 0xCF0000});
   }
 }
 
@@ -50,9 +50,9 @@ class Grass extends Block {
     ]);
 
     this.material = [
-      new THREE.MeshPhongMaterial({ map: sideTex }),
-      new THREE.MeshPhongMaterial({ map: loader.load('./texturas/hierba/top.png'), color: 0xa2ff6e }),
-      new THREE.MeshPhongMaterial({ map: loader.load('./texturas/hierba/bottom.png') }),
+      new THREE.MeshLambertMaterial({ map: sideTex }),
+      new THREE.MeshLambertMaterial({ map: loader.load('./texturas/hierba/top.png'), color: 0xa2ff6e }),
+      new THREE.MeshLambertMaterial({ map: loader.load('./texturas/hierba/bottom.png') }),
     ];
   }
 }
@@ -61,7 +61,7 @@ class Dirt extends Block {
   constructor() {
     super();
     // All faces same texture — single material = 1 draw call (vs 6)
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/tierra/tierra.png')
     });
   }
@@ -79,8 +79,8 @@ class OakWood extends Block {
     ]);
 
     this.material = [
-      new THREE.MeshPhongMaterial({ map: loader.load('./texturas/maderaroble/maderaroblelado.png') }),
-      new THREE.MeshPhongMaterial({ map: loader.load('./texturas/maderaroble/maderarobletop.png') }),
+      new THREE.MeshLambertMaterial({ map: loader.load('./texturas/maderaroble/maderaroblelado.png') }),
+      new THREE.MeshLambertMaterial({ map: loader.load('./texturas/maderaroble/maderarobletop.png') }),
     ];
   }
 }
@@ -89,7 +89,7 @@ class OakLeaves extends Block {
   constructor() {
     super();
     // All faces same texture — single material = 1 draw call (vs 6)
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/hojaroble/hoja.png'),
       alphaTest: 0.5,
       color: 0x345345,
@@ -100,7 +100,7 @@ class OakLeaves extends Block {
 class Stone extends Block {
   constructor() {
     super();
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/piedra/piedra.png')
     });
   }
@@ -109,7 +109,7 @@ class Stone extends Block {
 class Rock extends Block {
   constructor() {
     super();
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/roca/roca.png')
     });
   }
@@ -118,7 +118,7 @@ class Rock extends Block {
 class BaseStone extends Block {
   constructor() {
     super();
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/bedrock.png')
     });
   }
@@ -127,7 +127,7 @@ class BaseStone extends Block {
 class GlowStone extends Block {
   constructor() {
     super();
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/glowstone.png')
     });
   }
@@ -136,7 +136,7 @@ class GlowStone extends Block {
 class Glass extends Block {
   constructor() {
     super();
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/cristal.png'),
       alphaTest: 0.5,
     });

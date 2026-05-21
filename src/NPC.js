@@ -17,7 +17,7 @@ export class NPC extends THREE.Object3D {
     this.cambiarAnimacion = false;
     this.maxMovimientoExt = (maxAngleDeg * Math.PI) / 180;
 
-    this.boundingBox = new THREE.Mesh(boundingBoxGeo, new THREE.MeshPhongMaterial());
+    this.boundingBox = new THREE.Mesh(boundingBoxGeo, new THREE.MeshLambertMaterial());
     this.boundingBox.position.y += boundingBoxYOffset;
   }
 

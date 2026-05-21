@@ -13,7 +13,7 @@ class Pig extends NPC {
     this.createGUI(gui,titleGui);
 
     this.target=new THREE.Vector3(10, -5, 0);
-    this.material = new THREE.MeshPhongMaterial({color: 0x2dc100});
+    this.material = new THREE.MeshLambertMaterial({color: 0x2dc100});
         const textureLoader = new THREE.TextureLoader();
 
         this.physics=new C.Collisions(true, 0.8);

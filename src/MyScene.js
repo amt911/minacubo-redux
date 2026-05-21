@@ -302,7 +302,7 @@ class MyScene extends THREE.Scene {
     graficos.add(this.guiControls, 'cameraSensitivity', 0.1, 3.0, 0.05)
       .name('Camera sensitivity');
 
-    graficos.add(this.guiControls, 'renderDistance', 3, 15, 1)
+    graficos.add(this.guiControls, 'renderDistance', 3, 32, 1)
       .name('Render distance (reloads)')
       .onFinishChange((v) => {
         try { localStorage.setItem('renderDistance', String(v)); } catch { /* ignore */ }
@@ -441,10 +441,15 @@ class MyScene extends THREE.Scene {
     // sombras pequenas desaparecian.
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
-
+    // Manual shadow update — re-rendered every N frames in update() to amortise
+    // shadow-pass cost across multiple frames.
+    renderer.shadowMap.autoUpdate = false;
 
     renderer.setClearColor(new THREE.Color(0xEEEEEE), 1.0);
 
+    // Cap devicePixelRatio: HiDPI/retina screens render at 4x cost otherwise.
+    // 1.5 keeps text/UI sharp without the full retina hit.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 
     renderer.setSize(window.innerWidth, window.innerHeight);
 
@@ -563,6 +568,13 @@ class MyScene extends THREE.Scene {
     if (this._springArmCachedDist < postDist) {
       this.camera.position.copy(head).addScaledVector(postDir, this._springArmCachedDist);
     }
+
+    // Refresh shadow map every 3 frames — sun + scene move slowly, eye
+    // doesn't notice a 50ms lag in shadow position. Roughly 3x cheaper than
+    // re-rendering the shadow pass every frame.
+    if (!this._shadowFrame) this._shadowFrame = 0;
+    this._shadowFrame++;
+    if (this._shadowFrame % 3 === 0) this.renderer.shadowMap.needsUpdate = true;
 
     this.renderer.render(this, this.getCamera());
 

@@ -25,22 +25,22 @@ class Player extends THREE.Object3D {
 
     const textureLoader = new THREE.TextureLoader();
     const texturaCabeza = [
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/cabezaxpos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/cabezaxneg.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/cabezaypos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/cabezayneg.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/cabezazpos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/cabezazneg.png"),
       }),
     ];
@@ -62,44 +62,44 @@ class Player extends THREE.Object3D {
     // ARMS AND LEGS
 
     const texturabrazoR = [
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/brazoxpos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/brazoxneg.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/brazoypos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/brazoyneg.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/brazozpos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/brazozneg.png"),
       }),
     ];
 
 
     const texturabrazoL = [
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/brazoxneg.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/brazoxpos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/brazoypos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/brazoyneg.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/brazozposR.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/brazoznegR.png"),
       }),
 
@@ -131,43 +131,43 @@ class Player extends THREE.Object3D {
     // LEGS
 
     const texturaPiernaR = [
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/piernaxpos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/piernaxneg.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/piernaypos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/piernayneg.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/piernazpos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/piernazneg.png"),
       }),
     ];
 
     const texturaPiernaL = [
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/piernaxneg.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/piernaxpos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/piernaypos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/piernayneg.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/piernazpos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/piernazneg.png"),
       }),
     ];
@@ -188,22 +188,22 @@ class Player extends THREE.Object3D {
     this.piernaRW1.position.set(-2 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 0);
 
     const texturaCuerpo = [
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/cuerpoxpos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/cuerpoxneg.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/cuerpoypos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/cuerpoyneg.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/cuerpozpos.png"),
       }),
-      new THREE.MeshPhongMaterial({
+      new THREE.MeshLambertMaterial({
         map: textureLoader.load("./texturas/esteban/cuerpozneg.png"),
       }),
     ];
@@ -226,7 +226,7 @@ class Player extends THREE.Object3D {
     this.add(this.wrapperFinal);
 
     const boundingBoxGeom = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 32 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
-    this.boundingBox = new THREE.Mesh(boundingBoxGeom, new THREE.MeshPhongMaterial());
+    this.boundingBox = new THREE.Mesh(boundingBoxGeom, new THREE.MeshLambertMaterial());
     this.boundingBox.position.y += 16 / PM.PIXELES_ESTANDAR
 
     this.position.y += 10;
