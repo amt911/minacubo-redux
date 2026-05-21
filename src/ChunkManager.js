@@ -108,12 +108,34 @@ export class ChunkManager {
     mesh.count = list.length;
     mesh.instanceMatrix.needsUpdate = true;
 
-    // Compute bounding sphere from actual instance matrices — Three.js
-    // InstancedMesh has its own method that iterates the matrices.
-    // Without this, frustum culling uses the unit-cube geometry sphere at
-    // world origin → all chunks share one wrong sphere and disappear when
-    // the camera turns away from origin.
-    mesh.computeBoundingSphere();
+    // Compute a tight bounding sphere directly from the block list so
+    // Three.js frustum culling skips chunks outside the camera view.
+    // (InstancedMesh.computeBoundingSphere isn't available in this Three
+    // version, and falling back to geometry.boundingSphere would put every
+    // chunk's sphere at world origin → all chunks disappear when looking
+    // away from origin.)
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let minZ = Infinity, maxZ = -Infinity;
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i];
+      if (b.x < minX) minX = b.x;
+      if (b.x > maxX) maxX = b.x;
+      if (b.y < minY) minY = b.y;
+      if (b.y > maxY) maxY = b.y;
+      if (b.z < minZ) minZ = b.z;
+      if (b.z > maxZ) maxZ = b.z;
+    }
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const cz = (minZ + maxZ) / 2;
+    const hx = (maxX - minX) / 2 + 0.5; // + 0.5 for the half block extent
+    const hy = (maxY - minY) / 2 + 0.5;
+    const hz = (maxZ - minZ) / 2 + 0.5;
+    mesh.boundingSphere = new THREE.Sphere(
+      new THREE.Vector3(cx, cy, cz),
+      Math.hypot(hx, hy, hz)
+    );
     mesh.frustumCulled = true;
     mesh.castShadow = blockCastsShadow(type);
     mesh.receiveShadow = true;
