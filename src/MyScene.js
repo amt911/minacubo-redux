@@ -197,6 +197,12 @@ class MyScene extends THREE.Scene {
     this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
     this.camera.position.set(this.model.position.x, this.model.position.y + 10, this.model.position.z - 10);
 
+    // Initial spherical camera angles — used by pointer-lock AND arrow-key
+    // camera control. Pre-set so arrow keys work before the player touches
+    // the mouse.
+    this._camPhi = Math.PI * 0.3;
+    this._camTheta = Math.PI;
+
     // Pre-allocated vectors reused every frame — eliminate per-frame GC pressure.
     this.vector = new THREE.Vector3();
     this._v3A = new THREE.Vector3();
@@ -528,9 +534,27 @@ class MyScene extends THREE.Scene {
       this.model.position.z
     );
 
-    const isLocked = document.pointerLockElement === this.renderer.domElement;
+    // Arrow keys also rotate the camera — handy when the mouse isn't
+    // available (KVM switches, etc.).
+    const km = this.mapTeclas;
+    const arrowsHeld = km['ARROWLEFT'] || km['ARROWRIGHT'] || km['ARROWUP'] || km['ARROWDOWN'];
+    if (arrowsHeld) {
+      const arrowSpeed = 0.025 * (this.guiControls.cameraSensitivity ?? 1) * 60 * delta;
+      if (km['ARROWLEFT'])  this._camTheta += arrowSpeed;
+      if (km['ARROWRIGHT']) this._camTheta -= arrowSpeed;
+      if (km['ARROWUP'])    this._camPhi   -= arrowSpeed;
+      if (km['ARROWDOWN'])  this._camPhi   += arrowSpeed;
+      const minPhi = Math.PI * 0.15;
+      const maxPhi = Math.PI * 0.49;
+      this._camPhi = Math.max(minPhi, Math.min(maxPhi, this._camPhi));
+    }
 
-    if (isLocked) {
+    const isLocked = document.pointerLockElement === this.renderer.domElement;
+    // Use the spherical-angle camera path when pointer-locked OR when the
+    // player is steering the camera with the arrow keys.
+    const useManualCam = isLocked || arrowsHeld;
+
+    if (useManualCam) {
       // Pointer-lock mode: drive camera directly from _camTheta/_camPhi angles.
       // Skip cameraControl.update() — it would override the position we set.
       const phi = this._camPhi ?? Math.PI * 0.3;
