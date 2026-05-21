@@ -80,10 +80,17 @@ Mejorar la gestión de chunks:
 
 ## Fase 5 — Performance
 
-- [ ] Frustum culling chunks fuera de cámara
+- [x] Frustum culling chunks fuera de cámara
+- [x] Face culling: blocks with all 6 neighbours occupied are skipped (~50-70% drop)
 - [ ] Generación chunks en Web Worker
 - [ ] Greedy meshing (bloques contiguos misma cara → quad único)
+- [ ] Per-face culling (only emit faces with no neighbour, intermediate between block-cull and greedy)
+- [ ] Texture atlas (precondition for greedy meshing + reduces material switches)
 - [ ] LOD chunks lejanos (geometría simplificada)
+- [ ] Shadow optimisations: smaller shadow camera frustum, optional CSM
+- [ ] Cap renderer.pixelRatio (HiDPI screens render at 4× cost)
+- [ ] MeshPhong → MeshLambert (cheaper per-pixel)
+- [ ] Cull underground when player Y is above terrain top
 
 ## Fase 6 — Ambicioso
 
