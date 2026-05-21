@@ -87,40 +87,15 @@ class MyScene extends THREE.Scene {
     this.blockTypes = BLOCK_TYPES;
 
     this.blockMaterials = blockMaterials;
-    this.blockGeometries  = blockGeometries;
-
-    const TC = this.TAM_CHUNK;
-    const DR = this.DISTANCIA_RENDER;
-    this.sizeIMesh = {
-      Grass:         5 * TC * TC * DR * DR,
-      Dirt:         5 * TC * TC * DR * DR,
-      Rock:           0,
-      Stone:         5 * TC * TC * DR * DR,
-      OakWood:    1 * TC * TC * DR * DR,
-      BaseStone:     1 * TC * TC * DR * DR,
-      Glass:        1,
-      GlowStone: 1,
-      OakLeaves:     1 * TC * TC * DR * DR,
-    };
-
-    this.mesh = {};
-    for (const tipo of this.blockTypes) {
-      this.mesh[tipo] = new THREE.InstancedMesh(
-        this.blockGeometries[tipo],
-        this.blockMaterials[tipo],
-        this.sizeIMesh[tipo]
-      );
-    }
+    this.blockGeometries = blockGeometries;
 
     const noise = createTerrainNoise();
     this.chunkManager = new ChunkManager({
       TAM_CHUNK:        this.TAM_CHUNK,
       DISTANCIA_RENDER: this.DISTANCIA_RENDER,
       noise,
-      mesh:             this.mesh,
-      blockGeometries:    this.blockGeometries,
+      blockGeometries:  this.blockGeometries,
       blockMaterials:   this.blockMaterials,
-      sizeIMesh:        this.sizeIMesh,
       scene:            this,
     });
 
@@ -168,13 +143,8 @@ class MyScene extends THREE.Scene {
 
     this.raycast = new RaycastInteraction({
       camera:          this.camera,
-      mesh:            this.mesh,
-      blockGeometries:   this.blockGeometries,
-      blockMaterials:  this.blockMaterials,
-      sizeIMesh:       this.sizeIMesh,
-      chunk:           this.chunk,
-      chunkMinMax:     this.chunkMinMax,
-      blockTypes: this.blockTypes,
+      chunkManager:    this.chunkManager,
+      blockTypes:      this.blockTypes,
       getObjeto:       () => this.objeto,
       scene:           this,
       TAM_CHUNK:       this.TAM_CHUNK,
@@ -438,14 +408,6 @@ class MyScene extends THREE.Scene {
     });
   }
 
-  // Configura un InstancedMesh para que proyecte y reciba sombras.
-  // frustumCulled=false porque InstancedMesh no recalcula boundingSphere
-  // al cambiar matrices: sin esto el shadow pass podria descartar el mesh.
-  applyMeshShadows(mesh) {
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.frustumCulled = false;
-  }
 
   // Mantiene el sol y su target centrados sobre el jugador. Sin esto el
   // frustum ortografico del shadowMap, fijo en el espacio mundo, se queda
@@ -531,11 +493,9 @@ class MyScene extends THREE.Scene {
     this._springArmCaster.near = 0.1;
     this._springArmCaster.far = desired;
     let safeDist = desired;
-    for (const tipo in this.mesh) {
-      const hits = this._springArmCaster.intersectObject(this.mesh[tipo], false);
-      if (hits.length > 0 && hits[0].distance < safeDist) {
-        safeDist = Math.max(MIN_DIST, hits[0].distance - MARGIN);
-      }
+    const hits = this._springArmCaster.intersectObjects(this.chunkManager.allMeshes, false);
+    if (hits.length > 0 && hits[0].distance < safeDist) {
+      safeDist = Math.max(MIN_DIST, hits[0].distance - MARGIN);
     }
     return safeDist;
   }
