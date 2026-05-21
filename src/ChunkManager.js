@@ -332,16 +332,15 @@ export class ChunkManager {
   }
 
   /**
-   * Collect blocks for player collision (visible window only).
+   * Collect blocks for player collision — only the 3×3 chunks around player.
+   * Much cheaper than scanning the entire visible window each frame.
+   * @param {number} playerX
+   * @param {number} playerZ
    */
-  getPlayerCollisions() {
-    let result = [];
-    const { min, max } = this.chunkMinMax;
-    for (let i = min.x; i < max.x; i++) {
-      for (let j = min.z; j < max.z; j++) {
-        if (this.chunk[i]?.[j]) result = result.concat(this.chunk[i][j]);
-      }
-    }
-    return result;
+  getPlayerCollisions(playerX, playerZ) {
+    return this.getCollisionsAround(
+      identifyChunk(playerX, playerZ, this.TAM_CHUNK),
+      3
+    );
   }
 }

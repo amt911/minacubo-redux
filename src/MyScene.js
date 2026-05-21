@@ -157,10 +157,14 @@ class MyScene extends THREE.Scene {
     );
     this.add(this.pig);
 
-    this.fog = null;
+    // Thin edge fog — hides chunk pop-in at render boundary.
+    // Starts 0.5 chunks before the visible edge, ends 1 chunk beyond it.
+    const fogNear = this.TAM_CHUNK * (this.DISTANCIA_RENDER / 2 - 0.5);
+    const fogFar  = this.TAM_CHUNK * (this.DISTANCIA_RENDER / 2 + 1);
+    this.fog = new THREE.Fog(0x87CEEB, fogNear, fogFar);
     this.background = new THREE.Color(0x87CEEB);
 
-    this.dayNightCycle = new DayNightCycle(this, null, this.spotLight, this.sunLight);
+    this.dayNightCycle = new DayNightCycle(this, this.fog, this.spotLight, this.sunLight);
 
     this.raycast = new RaycastInteraction({
       camera:          this.camera,
@@ -605,7 +609,7 @@ class MyScene extends THREE.Scene {
       this.raycast.hideSelectionBox();
     }
 
-    const blocks = this.chunkManager.getPlayerCollisions();
+    const blocks = this.chunkManager.getPlayerCollisions(this.model.position.x, this.model.position.z);
     this.model.update(blocks, this.mapTeclas);
 
     this.npcManager.update(delta);
