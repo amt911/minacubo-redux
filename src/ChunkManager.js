@@ -59,6 +59,22 @@ export class ChunkManager {
     // Flat list of every currently-live chunk mesh — used by raycasters.
     /** @type {THREE.InstancedMesh[]} */
     this.allMeshes = [];
+
+    // Override the shared block geometry bounding sphere so per-chunk meshes
+    // frustum-cull correctly. Three.js Frustum.intersectsObject reads
+    // geometry.boundingSphere (not mesh.boundingSphere) and multiplies it by
+    // mesh.matrixWorld. We set each mesh.position to its chunk center, so
+    // the sphere ends up at the chunk center with the radius below.
+    // Radius covers a single chunk's worst-case extent (TC/2 in XZ, ~8
+    // deep + ~6 tree on top in Y, plus half-block padding).
+    const TC = this.TAM_CHUNK;
+    const sphereRadius = Math.hypot(TC / 2, 12, TC / 2);
+    for (const tipo in this._geo) {
+      this._geo[tipo].boundingSphere = new THREE.Sphere(
+        new THREE.Vector3(0, 0, 0),
+        sphereRadius
+      );
+    }
   }
 
   // ─── internal mesh helpers ────────────────────────────────────────────────
@@ -100,42 +116,23 @@ export class ChunkManager {
    */
   _createChunkMaterialMesh(chunkX, chunkZ, type, list) {
     const mesh = new THREE.InstancedMesh(this._geo[type], this._mat[type], list.length);
+
+    // Mesh translated to chunk center so geometry.boundingSphere (set in the
+    // constructor) lands at the chunk centre after matrixWorld. Instances
+    // are stored relative to that, world position works out the same.
+    const TC = this.TAM_CHUNK;
+    const cx = chunkX * TC + TC / 2;
+    const cz = chunkZ * TC + TC / 2;
+    mesh.position.set(cx, 0, cz);
+
     const matrix = new THREE.Matrix4();
     for (let i = 0; i < list.length; i++) {
-      matrix.setPosition(list[i].x, list[i].y, list[i].z);
+      matrix.setPosition(list[i].x - cx, list[i].y, list[i].z - cz);
       mesh.setMatrixAt(i, matrix);
     }
     mesh.count = list.length;
     mesh.instanceMatrix.needsUpdate = true;
 
-    // Compute a tight bounding sphere directly from the block list so
-    // Three.js frustum culling skips chunks outside the camera view.
-    // (InstancedMesh.computeBoundingSphere isn't available in this Three
-    // version, and falling back to geometry.boundingSphere would put every
-    // chunk's sphere at world origin → all chunks disappear when looking
-    // away from origin.)
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-    let minZ = Infinity, maxZ = -Infinity;
-    for (let i = 0; i < list.length; i++) {
-      const b = list[i];
-      if (b.x < minX) minX = b.x;
-      if (b.x > maxX) maxX = b.x;
-      if (b.y < minY) minY = b.y;
-      if (b.y > maxY) maxY = b.y;
-      if (b.z < minZ) minZ = b.z;
-      if (b.z > maxZ) maxZ = b.z;
-    }
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    const cz = (minZ + maxZ) / 2;
-    const hx = (maxX - minX) / 2 + 0.5; // + 0.5 for the half block extent
-    const hy = (maxY - minY) / 2 + 0.5;
-    const hz = (maxZ - minZ) / 2 + 0.5;
-    mesh.boundingSphere = new THREE.Sphere(
-      new THREE.Vector3(cx, cy, cz),
-      Math.hypot(hx, hy, hz)
-    );
     mesh.frustumCulled = true;
     mesh.castShadow = blockCastsShadow(type);
     mesh.receiveShadow = true;
