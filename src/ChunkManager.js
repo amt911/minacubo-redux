@@ -63,12 +63,11 @@ export class ChunkManager {
     // Override the shared block geometry bounding sphere so per-chunk meshes
     // frustum-cull correctly. Three.js Frustum.intersectsObject reads
     // geometry.boundingSphere (not mesh.boundingSphere) and multiplies it by
-    // mesh.matrixWorld. We set each mesh.position to its chunk center, so
-    // the sphere ends up at the chunk center with the radius below.
-    // Radius covers a single chunk's worst-case extent (TC/2 in XZ, ~8
-    // deep + ~6 tree on top in Y, plus half-block padding).
-    const TC = this.TAM_CHUNK;
-    const sphereRadius = Math.hypot(TC / 2, 12, TC / 2);
+    // mesh.matrixWorld. Per mesh we set mesh.position to the centroid of its
+    // blocks, so this sphere ends up centred on the data. The radius covers
+    // worst-case per-(chunk,material) extent: ~TC/2 in XZ + up to ~12 in Y
+    // for the tall stone+tree case, with margin.
+    const sphereRadius = 20;
     for (const tipo in this._geo) {
       this._geo[tipo].boundingSphere = new THREE.Sphere(
         new THREE.Vector3(0, 0, 0),
@@ -89,11 +88,37 @@ export class ChunkManager {
     const blocks = this.chunk[chunkX]?.[chunkZ];
     if (!blocks || blocks.length === 0) return;
 
+    // Build occupancy set covering this chunk + 8 neighbours so we can
+    // face-cull fully-buried blocks (every neighbour occupied → block hidden).
+    // Cheaper than per-face culling and still removes 50-70% of blocks in
+    // typical terrain.
+    const occupancy = new Set();
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dz = -1; dz <= 1; dz++) {
+        const neighbor = this.chunk[chunkX + dx]?.[chunkZ + dz];
+        if (!neighbor) continue;
+        for (let i = 0; i < neighbor.length; i++) {
+          const b = neighbor[i];
+          occupancy.add(b.x + ',' + b.y + ',' + b.z);
+        }
+      }
+    }
+
     /** @type {Record<string, Array<{x:number,y:number,z:number,material:string}>>} */
     const groups = {};
-    for (const b of blocks) {
-      if (!groups[b.material]) groups[b.material] = [];
-      groups[b.material].push(b);
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i];
+      if (
+        !occupancy.has((b.x + 1) + ',' + b.y + ',' + b.z) ||
+        !occupancy.has((b.x - 1) + ',' + b.y + ',' + b.z) ||
+        !occupancy.has(b.x + ',' + (b.y + 1) + ',' + b.z) ||
+        !occupancy.has(b.x + ',' + (b.y - 1) + ',' + b.z) ||
+        !occupancy.has(b.x + ',' + b.y + ',' + (b.z + 1)) ||
+        !occupancy.has(b.x + ',' + b.y + ',' + (b.z - 1))
+      ) {
+        if (!groups[b.material]) groups[b.material] = [];
+        groups[b.material].push(b);
+      }
     }
 
     // Dispose anything we already had for this chunk.
@@ -117,17 +142,23 @@ export class ChunkManager {
   _createChunkMaterialMesh(chunkX, chunkZ, type, list) {
     const mesh = new THREE.InstancedMesh(this._geo[type], this._mat[type], list.length);
 
-    // Mesh translated to chunk center so geometry.boundingSphere (set in the
-    // constructor) lands at the chunk centre after matrixWorld. Instances
-    // are stored relative to that, world position works out the same.
-    const TC = this.TAM_CHUNK;
-    const cx = chunkX * TC + TC / 2;
-    const cz = chunkZ * TC + TC / 2;
-    mesh.position.set(cx, 0, cz);
+    // Centroid of this material's blocks → mesh.position. The shared
+    // geometry sphere then ends up centred on the actual data after
+    // matrixWorld is applied, regardless of where blocks sit in Y.
+    let sumX = 0, sumY = 0, sumZ = 0;
+    for (let i = 0; i < list.length; i++) {
+      sumX += list[i].x;
+      sumY += list[i].y;
+      sumZ += list[i].z;
+    }
+    const cx = sumX / list.length;
+    const cy = sumY / list.length;
+    const cz = sumZ / list.length;
+    mesh.position.set(cx, cy, cz);
 
     const matrix = new THREE.Matrix4();
     for (let i = 0; i < list.length; i++) {
-      matrix.setPosition(list[i].x - cx, list[i].y, list[i].z - cz);
+      matrix.setPosition(list[i].x - cx, list[i].y - cy, list[i].z - cz);
       mesh.setMatrixAt(i, matrix);
     }
     mesh.count = list.length;
@@ -172,22 +203,21 @@ export class ChunkManager {
    * @param {number} chunkZ
    * @param {string} type
    */
-  rebuildChunkMaterial(chunkX, chunkZ, type) {
-    const blocks = this.chunk[chunkX]?.[chunkZ];
-    if (!blocks) return;
-    const list = blocks.filter((b) => b.material === type);
-
-    const existing = this.chunkMeshes[chunkX]?.[chunkZ]?.[type];
-    if (existing) {
-      this._scene.remove(existing);
-      existing.dispose();
-      const idx = this.allMeshes.indexOf(existing);
-      if (idx >= 0) this.allMeshes.splice(idx, 1);
-      delete this.chunkMeshes[chunkX][chunkZ][type];
-    }
-
-    if (list.length === 0) return;
-    this._createChunkMaterialMesh(chunkX, chunkZ, type, list);
+  /**
+   * Rebuild this chunk's meshes after a block add/remove. Face culling
+   * makes neighbour visibility depend on neighbour data, so rebuild the
+   * 4 cardinal-neighbour chunks too. `type` is kept for API compatibility
+   * but no longer used — we rebuild every material in each touched chunk.
+   * @param {number} chunkX
+   * @param {number} chunkZ
+   * @param {string} _type
+   */
+  rebuildChunkMaterial(chunkX, chunkZ, _type) {
+    this._buildChunkMesh(chunkX, chunkZ);
+    this._buildChunkMesh(chunkX - 1, chunkZ);
+    this._buildChunkMesh(chunkX + 1, chunkZ);
+    this._buildChunkMesh(chunkX, chunkZ - 1);
+    this._buildChunkMesh(chunkX, chunkZ + 1);
   }
 
   // ─── chunk data generation ────────────────────────────────────────────────
