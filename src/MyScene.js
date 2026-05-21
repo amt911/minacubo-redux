@@ -50,7 +50,7 @@ class MyScene extends THREE.Scene {
     // se llamaba antes, esos valores eran undefined → frustum NaN → shadow
     // map roto silenciosamente.
     this.TAM_CHUNK = 12;
-    this.DISTANCIA_RENDER = 7;
+    this.DISTANCIA_RENDER = 9;
 
     // Construimos los distinos elementos que tendremos en la escena
 
@@ -157,11 +157,10 @@ class MyScene extends THREE.Scene {
     );
     this.add(this.pig);
 
-    //Creacion del fog, el cielo y su animacion
-    this.fog= new THREE.Fog(0x87CEEB, this.TAM_CHUNK*(this.DISTANCIA_RENDER/2)-4, this.TAM_CHUNK*(this.DISTANCIA_RENDER/2));
-    this.background= new THREE.Color(0x87CEEB);
+    this.fog = null;
+    this.background = new THREE.Color(0x87CEEB);
 
-    this.dayNightCycle = new DayNightCycle(this, this.fog, this.spotLight, this.sunLight);
+    this.dayNightCycle = new DayNightCycle(this, null, this.spotLight, this.sunLight);
 
     this.raycast = new RaycastInteraction({
       camera:          this.camera,

@@ -296,18 +296,10 @@ export class ChunkManager {
 
     if (!needRebuild) return false;
 
-    // Remove current meshes and create fresh ones
-    for (const tipo in this.mesh) {
-      this._scene.remove(this.mesh[tipo]);
-      this.mesh[tipo] = new THREE.InstancedMesh(this._geo[tipo], this._mat[tipo], this.sizeIMesh[tipo]);
-      this._applyMeshShadows(this.mesh[tipo]);
-    }
-
-    // Fill visible window, generating missing chunks
+    // Generate any missing chunks in the new window
     for (let a = min.z; a <= max.z; a++) {
       for (let i = min.x; i <= max.x; i++) {
         if (this.chunk[i]?.[a]) continue;
-        // Generate new chunk
         if (!this.chunk[i]) this.chunk[i] = [];
         const { blocks } = this._generateChunkBlocks(i, a);
         this.chunkCollision.push(blocks);
@@ -317,6 +309,8 @@ export class ChunkManager {
       }
     }
 
+    // Reuse existing InstancedMesh objects — just overwrite matrix data.
+    // Avoids allocating new typed arrays every scroll step.
     this._rebuildAllMeshes();
     return true;
   }

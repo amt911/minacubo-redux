@@ -44,21 +44,21 @@ Roadmap para robustez (Docker, tests, TDD) y mejoras de juego.
 
 Romper `MyScene.js` (1105 líneas):
 
-- [ ] Extraer `ChunkManager.js`
-- [ ] Extraer `InputHandler.js`
-- [ ] Extraer `NPCManager.js`
+- [x] Extraer `ChunkManager.js`
+- [x] Extraer `InputHandler.js`
+- [x] Extraer `NPCManager.js`
 - [x] Extraer `DayNightCycle.js`
-- [ ] Extraer `RaycastInteraction.js`
-- [ ] Extraer `BlockRegistry.js` (catálogo Cubo subclases)
-- [ ] Event bus mini (mitt vendored o 20-line custom) en `libs/`
-- [ ] Clase base `NPC` + strategies (Follow, Patrol, Flee)
-- [ ] Convertir todos los archivos y código al inglés.
-- [ ] Mejorar el feedback del cubo que se va a crear/eliminar (ahora mismo es muy fino y tiene una linea en el cuadrado)
+- [x] Extraer `RaycastInteraction.js`
+- [x] Extraer `BlockRegistry.js` (catálogo Cubo subclases)
+- [x] Event bus mini (mitt vendored o 20-line custom) en `libs/`
+- [x] Clase base `NPC` + strategies (Follow, Patrol, Flee)
+- [x] Convertir todos los archivos y código al inglés.
+- [x] Mejorar el feedback del cubo que se va a crear/eliminar (ahora mismo es muy fino y tiene una linea en el cuadrado)
 
 Mejorar la gestión de chunks:
 
 - [ ] Hacer el algoritmo más eficiente.
-- [ ] Hacer que se generen chunks en ejes negativos (ahora mismo no se generan y el personaje se puede caer).
+- [x] Hacer que se generen chunks en ejes negativos (ahora mismo no se generan y el personaje se puede caer).
 - [ ] Intentar quitar la niebla, para ello hay que mejorar muchisimo la gestion del juego en general.
 
 ## Fase 4 — Features juego

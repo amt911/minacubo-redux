@@ -7,16 +7,16 @@ const NIGHT_COLOR = new THREE.Color(0x000000);
 const CYCLE_MS = 60_000;
 
 /**
- * Drives the day/night TWEEN cycle: animates fog, background colour, and
- * light intensities between sky-blue day and black night over CYCLE_MS ms,
- * then yoyo-repeats indefinitely.
+ * Drives the day/night TWEEN cycle: animates background colour and light
+ * intensities between sky-blue day and black night over CYCLE_MS ms,
+ * then yoyo-repeats indefinitely. Pass fog=null to run without scene fog.
  */
 export class DayNightCycle {
   /**
-   * @param {THREE.Scene} scene       - scene whose .background is updated
-   * @param {THREE.Fog} fog           - scene fog colour target
-   * @param {THREE.HemisphereLight} hemi  - ambient hemisphere light
-   * @param {THREE.DirectionalLight} sun  - directional sun light
+   * @param {THREE.Scene} scene            - scene whose .background is updated
+   * @param {THREE.Fog | null} fog         - scene fog colour target (optional)
+   * @param {THREE.HemisphereLight} hemi   - ambient hemisphere light
+   * @param {THREE.DirectionalLight} sun   - directional sun light
    */
   constructor(scene, fog, hemi, sun) {
     this._bgColor = new THREE.Color(SKY_COLOR);
@@ -31,7 +31,7 @@ export class DayNightCycle {
     new TWEEN.Tween(rgb)
       .to({ r: NIGHT_COLOR.r, g: NIGHT_COLOR.g, b: NIGHT_COLOR.b, intensidad: 0 }, CYCLE_MS)
       .onUpdate(() => {
-        fog.color.setRGB(rgb.r, rgb.g, rgb.b);
+        if (fog) fog.color.setRGB(rgb.r, rgb.g, rgb.b);
         this._bgColor.setRGB(rgb.r, rgb.g, rgb.b);
         scene.background = this._bgColor;
         hemi.intensity = rgb.intensidad * 0.3;
