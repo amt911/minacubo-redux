@@ -1,4 +1,4 @@
-import * as THREE from '../libs/three.module.js'
+import * as THREE from 'three'
 import * as PM from './ParametrosMundo.js'
 import * as C from './colisiones.js'
 
@@ -38,9 +38,9 @@ class Zombie extends THREE.Object3D {
     ];
 
     //CABESA
-    let geometriaCabeza = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
+    const geometriaCabeza = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
 
-    let cabeza = new THREE.Mesh(geometriaCabeza, texturaCabeza);
+    const cabeza = new THREE.Mesh(geometriaCabeza, texturaCabeza);
 
     cabeza.position.y = 4 / PM.PIXELES_ESTANDAR;
 
@@ -97,12 +97,12 @@ class Zombie extends THREE.Object3D {
 
     ];
 
-    let geometriaExtremidad = new THREE.BoxGeometry(4 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
-    let brazoL = new THREE.Mesh(geometriaExtremidad, texturabrazoL);
+    const geometriaExtremidad = new THREE.BoxGeometry(4 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
+    const brazoL = new THREE.Mesh(geometriaExtremidad, texturabrazoL);
 
     //brazo izquierdo
     brazoL.position.y = -4 / PM.PIXELES_ESTANDAR;
-    let brazoR = brazoL.clone();
+    const brazoR = brazoL.clone();
 
     brazoR.material = texturabrazoR;
     this.brazoLeft = new THREE.Object3D();
@@ -177,8 +177,8 @@ class Zombie extends THREE.Object3D {
       }),
     ];
     //Izquierda
-    let piernaL = new THREE.Mesh(geometriaExtremidad, texturaPiernaL);
-    let piernaR = new THREE.Mesh(geometriaExtremidad, texturaPiernaR);
+    const piernaL = new THREE.Mesh(geometriaExtremidad, texturaPiernaL);
+    const piernaR = new THREE.Mesh(geometriaExtremidad, texturaPiernaR);
 
     piernaL.position.y = -6 / PM.PIXELES_ESTANDAR;
     piernaR.position.y = -6 / PM.PIXELES_ESTANDAR;
@@ -216,9 +216,9 @@ class Zombie extends THREE.Object3D {
       }),
     ];
     //TORSO
-    let geometriaTorso = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
+    const geometriaTorso = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
 
-    let torso = new THREE.Mesh(geometriaTorso, texturaCuerpo);
+    const torso = new THREE.Mesh(geometriaTorso, texturaCuerpo);
     torso.position.y = 18 / PM.PIXELES_ESTANDAR;
     //this.add(torso);
 
@@ -236,7 +236,7 @@ class Zombie extends THREE.Object3D {
     this.add(this.wrapperFinal);
 
     //BoundingBox
-    let boundingBoxGeom = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 32 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
+    const boundingBoxGeom = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 32 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
     this.boundingBox = new THREE.Mesh(boundingBoxGeom, new THREE.MeshPhongMaterial());
     this.boundingBox.position.y += 16 / PM.PIXELES_ESTANDAR
 
@@ -262,7 +262,7 @@ class Zombie extends THREE.Object3D {
       }
     }
 
-    let folder = gui.addFolder(titleGui);
+    const folder = gui.addFolder(titleGui);
     // Estas lineas son las que añaden los componentes de la interfaz
     // Las tres cifras indican un valor mínimo, un máximo y el incremento
     // El método   listen()   permite que si se cambia el valor de la letiable en código, el deslizador de la interfaz se actualice
@@ -275,7 +275,7 @@ class Zombie extends THREE.Object3D {
 
 
   animacion(esForward, velocidad) {
-    let velFinal = (esForward) ? velocidad : -velocidad;
+    const velFinal = (esForward) ? velocidad : -velocidad;
 
     if (this.cambiarAnimacion) {
       this.piernaLW1.rotation.x += velFinal
@@ -296,12 +296,12 @@ class Zombie extends THREE.Object3D {
   }
 
   update(bloques) {
-    let delta = this.clock.getDelta();
+    const delta = this.clock.getDelta();
     let velocidad= delta * 4.317;
     this.animacion(true, velocidad);
 
     velocidad = delta * 4.317;
-    let vectorMovimiento = new THREE.Vector3(0, 0, 1);
+    const vectorMovimiento = new THREE.Vector3(0, 0, 1);
     if (this.guiControls.moviendose) {
 
       //vectormovimiento es el vector entre el modelo y el zombie

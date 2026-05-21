@@ -1,4 +1,4 @@
-import * as THREE from '../libs/three.module.js'
+import * as THREE from 'three'
 import * as PM from './ParametrosMundo.js'
 import * as C from './colisiones.js'
 
@@ -46,9 +46,9 @@ class Esteban extends THREE.Object3D {
     ];
 
     //CABEZA
-    let geometriaCabeza = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
+    const geometriaCabeza = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
 
-    let cabeza = new THREE.Mesh(geometriaCabeza, texturaCabeza);
+    const cabeza = new THREE.Mesh(geometriaCabeza, texturaCabeza);
 
     cabeza.position.y = 4 / PM.PIXELES_ESTANDAR;
 
@@ -105,12 +105,12 @@ class Esteban extends THREE.Object3D {
 
     ];
 
-    let geometriaExtremidad = new THREE.BoxGeometry(4 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
-    let brazoL = new THREE.Mesh(geometriaExtremidad, texturabrazoL);
+    const geometriaExtremidad = new THREE.BoxGeometry(4 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
+    const brazoL = new THREE.Mesh(geometriaExtremidad, texturabrazoL);
 
     //brazo izquierdo
     brazoL.position.y = -4 / PM.PIXELES_ESTANDAR;
-    let brazoR = brazoL.clone();
+    const brazoR = brazoL.clone();
     brazoR.material = texturabrazoR;
     this.brazoLeft = new THREE.Object3D();
     this.brazoLeft.add(brazoL);
@@ -172,8 +172,8 @@ class Esteban extends THREE.Object3D {
       }),
     ];
     //Izquierda
-    let piernaL = new THREE.Mesh(geometriaExtremidad, texturaPiernaL);
-    let piernaR = new THREE.Mesh(geometriaExtremidad, texturaPiernaR);
+    const piernaL = new THREE.Mesh(geometriaExtremidad, texturaPiernaL);
+    const piernaR = new THREE.Mesh(geometriaExtremidad, texturaPiernaR);
 
     piernaL.position.y = -6 / PM.PIXELES_ESTANDAR;
     piernaR.position.y = -6 / PM.PIXELES_ESTANDAR;
@@ -208,9 +208,9 @@ class Esteban extends THREE.Object3D {
       }),
     ];
     //TORSO
-    let geometriaTorso = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
+    const geometriaTorso = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
 
-    let torso = new THREE.Mesh(geometriaTorso, texturaCuerpo);
+    const torso = new THREE.Mesh(geometriaTorso, texturaCuerpo);
     torso.position.y = 18 / PM.PIXELES_ESTANDAR;
 
     //ESTO ES NECESARIO PARA QUE FUNCIONE LA ANIMACION DE STRAFE
@@ -225,7 +225,7 @@ class Esteban extends THREE.Object3D {
 
     this.add(this.wrapperFinal);
 
-    let boundingBoxGeom = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 32 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
+    const boundingBoxGeom = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 32 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
     this.boundingBox = new THREE.Mesh(boundingBoxGeom, new THREE.MeshPhongMaterial());
     this.boundingBox.position.y += 16 / PM.PIXELES_ESTANDAR
 
@@ -240,7 +240,7 @@ class Esteban extends THREE.Object3D {
     this.cameraControls = camara;
   }
 
-  createGUI(gui, titleGui) {
+  createGUI(_gui, _titleGui) {
 
   }
 
@@ -254,7 +254,7 @@ class Esteban extends THREE.Object3D {
 
 
   animacion(esForward, velocidad){
-    let velFinal=(esForward)? velocidad : -velocidad;
+    const velFinal=(esForward)? velocidad : -velocidad;
 
     if (this.cambiarAnimacion) {
       this.piernaLW1.rotation.x += velFinal
@@ -279,14 +279,22 @@ class Esteban extends THREE.Object3D {
   }
 
   update(bloques, teclasPulsadas) {
-    let delta= this.clock.getDelta();
-    let velocidad = delta * 4.317;
-    this.cabezaW1.rotation.x = Math.PI / 2 - this.cameraControls.getPolarAngle();
-    this.rotation.y = - Math.PI + this.cameraControls.getAzimuthalAngle();
+    const delta= this.clock.getDelta();
+    const velocidad = delta * 4.317;
+    // Derive orientation from camera geometry — works regardless of whether
+    // OrbitControls or pointer-lock mode is driving the camera.
+    const cp = this.cameraControls.object.position;
+    const ct = this.cameraControls.target;
+    const dx = cp.x - ct.x;
+    const dy = cp.y - ct.y;
+    const dz = cp.z - ct.z;
+    const dxz = Math.sqrt(dx * dx + dz * dz);
+    this.cabezaW1.rotation.x = Math.PI / 2 - Math.atan2(dxz, dy);
+    this.rotation.y = Math.atan2(-dx, -dz);
     this.boundingBox.rotation.y = - Math.PI + this.cameraControls.getAzimuthalAngle();
 
 
-    let vectorDir=new THREE.Vector3(0, 0, 0);
+    const vectorDir=new THREE.Vector3(0, 0, 0);
 
     let moviendose=false;
     let esForward=true;
@@ -347,16 +355,20 @@ class Esteban extends THREE.Object3D {
       }
     }
 
-    let velocidadFinal=(teclasPulsadas["SHIFT"])? velocidad*2 : velocidad;
+    const velocidadFinal=(teclasPulsadas["SHIFT"])? velocidad*2 : velocidad;
 
-    this.translateOnAxis(vectorDir.normalize(), velocidadFinal);
-
-    this.boundingBox.translateOnAxis(vectorDir, velocidadFinal);
-    
     if(moviendose)
       this.animacion(esForward, velocidadFinal);
-    
-    this.colisiones.update(bloques, this, this.boundingBox, teclasPulsadas, vectorDir, velocidad);
+
+    // vectorDir esta en LOCAL space del personaje (W = +Z local). Antes
+    // Esteban llamaba a this.translateOnAxis(vectorDir, ...), que aplica
+    // internamente la rotacion del Object3D para convertir el eje local a
+    // world space. Ahora que colisiones.update recibe el vector y lo trata
+    // como delta world, hay que rotarlo aqui o W deja de ser "hacia donde
+    // mira la camara" cuando la camara orbita (bug de desincronizacion
+    // teclado/camara reportado).
+    const worldDir = vectorDir.clone().applyQuaternion(this.quaternion);
+    this.colisiones.update(bloques, this, this.boundingBox, teclasPulsadas, worldDir, velocidad);
   }
 }
 

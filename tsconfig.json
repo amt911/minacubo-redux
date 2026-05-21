@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "paths": {
+      "three/addons/*": ["./node_modules/three/examples/jsm/*"]
+    }
+  },
+  "include": ["src/**/*.js"],
+  "exclude": ["node_modules", "coverage", "graphify-out", "**/*.test.js"]
+}

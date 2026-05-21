@@ -1,6 +1,6 @@
-libs/
 texturas/
 node_modules/
 coverage/
 graphify-out/
+resources/
 package-lock.json

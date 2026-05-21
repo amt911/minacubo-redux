@@ -3,7 +3,7 @@ import globals from 'globals';
 
 export default [
   {
-    ignores: ['libs/**', 'texturas/**', 'node_modules/**', 'coverage/**', 'graphify-out/**'],
+    ignores: ['texturas/**', 'node_modules/**', 'coverage/**', 'graphify-out/**', 'resources/**'],
   },
   js.configs.recommended,
   {
@@ -13,12 +13,6 @@ export default [
       globals: {
         ...globals.browser,
         ...globals.node,
-        THREE: 'readonly',
-        TWEEN: 'readonly',
-        $: 'readonly',
-        jQuery: 'readonly',
-        noise: 'readonly',
-        Stats: 'readonly',
       },
     },
     rules: {

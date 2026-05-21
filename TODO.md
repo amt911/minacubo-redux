@@ -21,16 +21,24 @@ Roadmap para robustez (Docker, tests, TDD) y mejoras de juego.
 
 ## Fase 2 — TDD lógica pura
 
-- [ ] Usar npm para los paquetes, ahora mismo están copiados a lo cutre
-- [ ] Mejorar la lógica por completo de colisiones. Ahora mismo va muy mal (si se pone debajo de un árbol y se salta se sube automáticamente a la copa, si se colisiona contra un cubo y se sigue andando tiembla, etc)
-- [ ] Extraer AABB de `colisiones.js` a función pura testable
-- [ ] Escribir `colisiones.test.js` (overlap total, tangente, eje único, sin overlap)
-- [ ] Tests `ParametrosMundo.js` (snapshot constantes)
-- [ ] Extraer `ArbolRoble` a función pura → `estructuras.test.js` (shape, conteo tronco/hojas)
-- [ ] Extraer `chunkMath.js` de `MyScene.js` (identificarChunk, world↔chunk coords)
-- [ ] Tests `chunkMath` (bordes, negativos, midpoint shift)
-- [ ] Seed determinista Perlin (param opcional, fallback random)
-- [ ] Tests terrain con seed fijo (snapshot heightmap)
+- [x] Usar npm para los paquetes, ahora mismo están copiados a lo cutre
+- [x] Mejorar la lógica por completo de colisiones. Ahora mismo va muy mal (si se pone debajo de un árbol y se salta se sube automáticamente a la copa, si se colisiona contra un cubo y se sigue andando tiembla, etc)
+- [x] Mejorar la iluminación, ahora mismo es plana.
+- [x] Revisar el algoritmo de ruido perlin y usar mejor un paquete npm.
+- [x] Extraer AABB de `colisiones.js` a función pura testable
+- [x] Escribir `colisiones.test.js` (overlap total, tangente, eje único, sin overlap)
+- [x] Tests `ParametrosMundo.js` (snapshot constantes)
+- [x] Extraer `ArbolRoble` a función pura → `estructuras.test.js` (shape, conteo tronco/hojas)
+- [x] Extraer `chunkMath.js` de `MyScene.js` (identificarChunk, world↔chunk coords)
+- [x] Tests `chunkMath` (bordes, negativos, midpoint shift)
+- [x] Seed determinista Perlin (param opcional, fallback random)
+- [x] Tests terrain con seed fijo (snapshot heightmap)
+- [x] Hacer el feedback muchísimo más eficiente para que esté siempre activo y no consuma tantos recursos.
+- [x] Mejorar la distribución de los archivos, ahora mismo están todos al tuntún.
+- [x] Mejorar controles juego, ahora mismo para mover la cámara se hace con la rueda del ratón pulsándola y no se puede hacer nada más. Asimismo, si se mueve la cámara hace clip por debajo del terreno. Lo que quiero es algo como minecraft porque ademas no se puede mover la camara y mover al jugador al mismo tiempo, provoca que se quede pillado moviendose en las ultimas teclas pulsadas.
+- [x] Cambiar y usar TypeScript 
+- [x] Mejorar cámara, quiero que cuando se mueva lo más abajo posible no clipee con el suelo, pero esto quiere decir que cuando haya algún suelo más abajo, debe bajar la cámara más, así como si hay montañas. En el caso de las montañas, lo suyo es acercar la cámara para no ver el interior de las mismas.
+- [x] Limpiar funciones y paquetes deprecated (por ejemplo, tween.update)
 
 ## Fase 3 — Refactor god class
 
@@ -39,11 +47,13 @@ Romper `MyScene.js` (1105 líneas):
 - [ ] Extraer `ChunkManager.js`
 - [ ] Extraer `InputHandler.js`
 - [ ] Extraer `NPCManager.js`
-- [ ] Extraer `DayNightCycle.js`
+- [x] Extraer `DayNightCycle.js`
 - [ ] Extraer `RaycastInteraction.js`
 - [ ] Extraer `BlockRegistry.js` (catálogo Cubo subclases)
 - [ ] Event bus mini (mitt vendored o 20-line custom) en `libs/`
 - [ ] Clase base `NPC` + strategies (Follow, Patrol, Flee)
+- [ ] Convertir todos los archivos y código al inglés.
+- [ ] Mejorar el feedback del cubo que se va a crear/eliminar (ahora mismo es muy fino y tiene una linea en el cuadrado)
 
 ## Fase 4 — Features juego
 
@@ -57,6 +67,10 @@ Romper `MyScene.js` (1105 líneas):
 - [ ] Cuevas con Perlin 3D (huecos en terreno)
 - [ ] Iluminación dinámica antorchas + `PiedraLuminosa` (PointLight)
 - [ ] Controles touch/mobile (joystick virtual + botones)
+- [ ] Ver alguna forma de hostearlo (quizás con vercel)
+- [ ] Ajustes de gráficos del juego
+- [ ] Añadir generador de niveles como en minecraft
+- [ ] Añadir fisica de agua.
 
 ## Fase 5 — Performance
 

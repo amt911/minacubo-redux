@@ -1,9 +1,18 @@
 services:
   minacubo:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     container_name: minacubo-redux
     ports:
-      - "8080:80"
+      - "8080:3000"
     volumes:
-      - .:/usr/share/nginx/html:ro
-    restart: unless-stopped
+      - .:/usr/src/minacubo
+      - minacubo_node_modules:/usr/src/minacubo/node_modules
+    networks:
+      default:
+        aliases:
+          - minacubo
+
+volumes:
+  minacubo_node_modules:
