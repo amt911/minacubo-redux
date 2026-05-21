@@ -54,11 +54,9 @@ export class ChunkManager {
     /** @type {THREE.InstancedMesh[]} */
     this.allMeshes = [];
 
-    // Mesh build queue — processed N items per frame from tick().
-    // Avoids freezing the main thread when many chunks finish at once.
+    // Mesh build queue — drained by tick() within a per-frame time budget.
     /** @type {Array<{chunkX:number, chunkZ:number}>} */
     this._meshQueue = [];
-    this._maxMeshBuildsPerFrame = 4;
 
     // Override shared geometry boundingSphere for per-chunk frustum culling.
     // See _createChunkMaterialMesh — mesh.position is set per chunk, this
@@ -273,18 +271,24 @@ export class ChunkManager {
     }
 
     // Queue worker gen for every other chunk in the initial window + a
-    // PRELOAD_RING outside it. The ring chunks aren't visible (frustum-culled)
-    // but their data + mesh is ready before the player scrolls into them, so
-    // a chunk-boundary crossing is seamless.
+    // PRELOAD_RING outside it. Dispatch in distance-from-spawn order so the
+    // worker pool (FIFO) processes chunks the player will actually see first.
     const R = ChunkManager.PRELOAD_RING;
+    const spawnCX = Math.floor(DR / 2);
+    const spawnCZ = Math.floor(DR / 2);
+    const queue = [];
     for (let i = -R; i < DR + R; i++) {
       for (let j = -R; j < DR + R; j++) {
         if (i === 0 && j === 0) continue;
-        this._genChunkAsync(i, j).then((blocks) => {
-          this._storeChunkData(i, j, blocks);
-          this._meshQueue.push({ chunkX: i, chunkZ: j });
-        });
+        queue.push({ i, j, d: Math.abs(i - spawnCX) + Math.abs(j - spawnCZ) });
       }
+    }
+    queue.sort((a, b) => a.d - b.d);
+    for (const { i, j } of queue) {
+      this._genChunkAsync(i, j).then((blocks) => {
+        this._storeChunkData(i, j, blocks);
+        this._meshQueue.push({ chunkX: i, chunkZ: j });
+      });
     }
 
     // Show chunk (0,0) immediately so the player isn't staring at void.
@@ -297,15 +301,27 @@ export class ChunkManager {
    * Drain a few mesh builds from the queue. Call once per frame.
    */
   tick() {
-    let count = 0;
+    if (this._meshQueue.length === 0) return;
+
     const R = ChunkManager.PRELOAD_RING;
-    while (count < this._maxMeshBuildsPerFrame && this._meshQueue.length > 0) {
+    const { min, max } = this.chunkMinMax;
+    const cx = (min.x + max.x) / 2;
+    const cz = (min.z + max.z) / 2;
+
+    // Sort by distance from window centre so chunks near the player build
+    // first. Cheap relative to the actual mesh builds even for large queues.
+    this._meshQueue.sort((a, b) =>
+      (Math.abs(a.chunkX - cx) + Math.abs(a.chunkZ - cz)) -
+      (Math.abs(b.chunkX - cx) + Math.abs(b.chunkZ - cz))
+    );
+
+    // Time-budget the mesh builds so we don't blow a frame even with a deep
+    // backlog. ~6ms leaves headroom for the rest of the frame at 60 FPS.
+    const start = performance.now();
+    while (this._meshQueue.length > 0 && performance.now() - start < 6) {
       const { chunkX, chunkZ } = this._meshQueue.shift();
-      // Skip if chunk fell outside the preloaded range during scroll.
-      const { min, max } = this.chunkMinMax;
       if (chunkX < min.x - R || chunkX > max.x + R || chunkZ < min.z - R || chunkZ > max.z + R) continue;
       this._buildChunkMesh(chunkX, chunkZ);
-      count++;
     }
   }
 
