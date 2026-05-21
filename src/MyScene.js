@@ -321,6 +321,10 @@ class MyScene extends THREE.Scene {
     document.addEventListener('pointerlockchange', () => {
       if (document.pointerLockElement === canvas) {
         document.body.classList.add('pointer-locked');
+        // Disable OrbitControls while locked — otherwise its pointerdown
+        // handler tries to setPointerCapture on a pointer that no longer
+        // has an active pointer id, throwing InvalidStateError.
+        this.cameraControl.enabled = false;
         // Sync angles from current camera–head offset so there's no jump.
         const head = new THREE.Vector3(
           this.model.position.x,
@@ -333,6 +337,7 @@ class MyScene extends THREE.Scene {
         this._camTheta = Math.atan2(offset.x, offset.z);
       } else {
         document.body.classList.remove('pointer-locked');
+        this.cameraControl.enabled = true;
       }
     });
 
