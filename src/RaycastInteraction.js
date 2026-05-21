@@ -51,6 +51,7 @@ export class RaycastInteraction {
 
     this._feedbackRaycaster = new THREE.Raycaster();
     this._feedbackMouse = new THREE.Vector2(0, 0);
+    this._instanceMatrix = new THREE.Matrix4();
   }
 
   // ─── helpers ──────────────────────────────────────────────────────────────
@@ -61,21 +62,36 @@ export class RaycastInteraction {
   }
 
   /**
+   * Block centre from a raycast intersection.
+   *
+   * Uses hit.instanceId + the instance matrix to read the hit block's exact
+   * world position. Previously we derived (x, y, z) from hit.point + face
+   * normal, which floated by ~1e-7 due to ray-triangle precision; that was
+   * enough to break the strict-equality findIndex against stored block
+   * coordinates (so left-click silently did nothing).
+   *
    * @param {THREE.Intersection} hit
-   * @param {boolean} forRemoval
+   * @param {boolean} forRemoval  true → return the hit block, false → adjacent
    */
   _blockCenterFromHit(hit, forRemoval) {
-    const p = hit.point;
-    const n = hit.face.normal;
-    const sign = forRemoval ? -1 : 1;
+    const mesh = /** @type {THREE.InstancedMesh} */ (hit.object);
+    this._instanceMatrix.identity();
+    mesh.getMatrixAt(hit.instanceId, this._instanceMatrix);
+    // Instance matrices store positions relative to mesh.position; add it back
+    // to recover the world-space block centre. Mesh has no rotation/scale.
+    const ix = this._instanceMatrix.elements[12];
+    const iy = this._instanceMatrix.elements[13];
+    const iz = this._instanceMatrix.elements[14];
+    const wx = ix + mesh.position.x;
+    const wy = iy + mesh.position.y;
+    const wz = iz + mesh.position.z;
 
-    if (Math.abs(n.x) > 0.5) {
-      return { x: p.x + n.x * 0.5 * sign, y: Math.floor(p.y) + 0.5, z: Math.round(p.z) };
-    } else if (Math.abs(n.y) > 0.5) {
-      return { x: Math.round(p.x), y: p.y + n.y * 0.5 * sign, z: Math.round(p.z) };
-    } else {
-      return { x: Math.round(p.x), y: Math.floor(p.y) + 0.5, z: p.z + n.z * 0.5 * sign };
+    if (forRemoval) {
+      return { x: wx, y: wy, z: wz };
     }
+    // Placement: step one block along the hit face normal.
+    const n = hit.face.normal;
+    return { x: wx + n.x, y: wy + n.y, z: wz + n.z };
   }
 
   /**
