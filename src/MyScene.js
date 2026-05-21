@@ -293,7 +293,7 @@ class MyScene extends THREE.Scene {
       shadowsEnabled: true,
       shadowResolution: 1024,
       cameraSensitivity: 1.0,
-      renderDistance: this.DISTANCIA_RENDER,
+      renderDistance: MyScene._loadRenderDistance(),
     }
 
     const folder = gui.addFolder('Ayudas');
