@@ -4,6 +4,7 @@ import * as estructuras from './estructuras.js';
 import * as PM from './ParametrosMundo.js';
 import { identifyChunk } from './chunkMath.js';
 import { terrainHeight } from './noise.js';
+import { blockCastsShadow } from './BlockRegistry.js';
 
 function isNearOther(x, z, list) {
   for (const p of list) {
@@ -57,8 +58,9 @@ export class ChunkManager {
 
   // ─── internal helpers ──────────────────────────────────────────────────────
 
-  _applyMeshShadows(mesh) {
-    mesh.castShadow    = true;
+  /** @param {THREE.InstancedMesh} mesh @param {string} type */
+  _applyMeshShadows(mesh, type) {
+    mesh.castShadow    = blockCastsShadow(type);
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
   }
@@ -266,7 +268,7 @@ export class ChunkManager {
     this.mesh['OakWood'].count = cMadera;
 
     for (const tipo in this.mesh) {
-      this._applyMeshShadows(this.mesh[tipo]);
+      this._applyMeshShadows(this.mesh[tipo], tipo);
       this._scene.add(this.mesh[tipo]);
     }
 

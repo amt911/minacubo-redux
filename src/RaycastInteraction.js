@@ -1,6 +1,7 @@
 // @ts-check
 import * as THREE from 'three';
 import { identifyChunk } from './chunkMath.js';
+import { blockCastsShadow } from './BlockRegistry.js';
 
 export class RaycastInteraction {
   /**
@@ -89,9 +90,9 @@ export class RaycastInteraction {
     }
   }
 
-  /** @param {Record<string,THREE.InstancedMesh>} meshes */
-  _applyMeshShadows(mesh) {
-    mesh.castShadow = true;
+  /** @param {THREE.InstancedMesh} mesh @param {string} type */
+  _applyMeshShadows(mesh, type) {
+    mesh.castShadow = blockCastsShadow(type);
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
   }
@@ -101,7 +102,7 @@ export class RaycastInteraction {
     this._mesh[tipo] = new THREE.InstancedMesh(
       this._geo[tipo], this._mat[tipo], this._sizeIMesh[tipo]
     );
-    this._applyMeshShadows(this._mesh[tipo]);
+    this._applyMeshShadows(this._mesh[tipo], tipo);
 
     const matrix = new THREE.Matrix4();
     let l = 0;

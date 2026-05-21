@@ -35,3 +35,20 @@ export const blockMaterials = Object.fromEntries(
 export const blockGeometries = Object.fromEntries(
   Object.entries(_instances).map(([k, v]) => [k, v.geometria])
 );
+
+// Materials that cast shadows. Buried bulk (Dirt, Stone, Rock) is excluded —
+// they're always surrounded by other blocks so their shadow contribution is
+// invisible, but they double shadow-map geometry. Big perf win to skip them.
+const _SHADOW_CASTERS = new Set([
+  'Grass',
+  'OakWood',
+  'OakLeaves',
+  'BaseStone',
+  'Glass',
+  'GlowStone',
+]);
+
+/** @param {string} type */
+export function blockCastsShadow(type) {
+  return _SHADOW_CASTERS.has(type);
+}

@@ -50,7 +50,7 @@ class MyScene extends THREE.Scene {
     // se llamaba antes, esos valores eran undefined → frustum NaN → shadow
     // map roto silenciosamente.
     this.TAM_CHUNK = 12;
-    this.DISTANCIA_RENDER = 9;
+    this.DISTANCIA_RENDER = MyScene._loadRenderDistance();
 
     // Construimos los distinos elementos que tendremos en la escena
 
@@ -276,6 +276,14 @@ class MyScene extends THREE.Scene {
     this.model.addCamara(this.cameraControl);
   }
 
+  static _loadRenderDistance() {
+    try {
+      const v = parseInt(localStorage.getItem('renderDistance') ?? '9', 10);
+      if (Number.isFinite(v) && v >= 3 && v <= 15) return v;
+    } catch { /* localStorage may be unavailable */ }
+    return 9;
+  }
+
   createGUI() {
     const gui = new GUI();
 
@@ -285,6 +293,7 @@ class MyScene extends THREE.Scene {
       shadowsEnabled: true,
       shadowResolution: 1024,
       cameraSensitivity: 1.0,
+      renderDistance: this.DISTANCIA_RENDER,
     }
 
     const folder = gui.addFolder('Ayudas');
@@ -322,6 +331,13 @@ class MyScene extends THREE.Scene {
 
     graficos.add(this.guiControls, 'cameraSensitivity', 0.1, 3.0, 0.05)
       .name('Camera sensitivity');
+
+    graficos.add(this.guiControls, 'renderDistance', 3, 15, 1)
+      .name('Render distance (reloads)')
+      .onFinishChange((v) => {
+        try { localStorage.setItem('renderDistance', String(v)); } catch { /* ignore */ }
+        location.reload();
+      });
 
     return gui;
   }
