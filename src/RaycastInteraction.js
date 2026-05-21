@@ -33,13 +33,30 @@ export class RaycastInteraction {
 
     this._rightDragStart = null;
 
-    // Selection highlight box
-    const geo = new THREE.BoxGeometry(1, 1, 1);
-    this.selectionBox = new THREE.Mesh(geo);
-    const mat = /** @type {THREE.MeshBasicMaterial} */ (this.selectionBox.material);
-    mat.wireframe = true;
-    mat.wireframeLinewidth = 3;
-    mat.color.set(0x333333);
+    // Selection highlight: EdgesGeometry lines + semi-transparent fill
+    // Both scaled slightly above 1 to avoid z-fighting with the block face.
+    const highlightGeo = new THREE.BoxGeometry(1, 1, 1);
+    const SCALE = 1.005;
+
+    const fill = new THREE.Mesh(
+      highlightGeo,
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.15,
+        depthWrite: false,
+      })
+    );
+    fill.scale.setScalar(SCALE);
+
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(highlightGeo),
+      new THREE.LineBasicMaterial({ color: 0x000000 })
+    );
+    edges.scale.setScalar(SCALE);
+
+    this.selectionBox = new THREE.Group();
+    this.selectionBox.add(fill, edges);
     this.selectionBox.visible = false;
     this._scene.add(this.selectionBox);
 

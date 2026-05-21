@@ -51,32 +51,32 @@ describe('shiftMinMaxIfNeeded', () => {
     max: { x: maxX, z: maxZ },
   });
 
-  it('player en el midpoint exacto → no shift', () => {
+  it('player at exact midpoint → no shift', () => {
     const w = window(0, 0, 6, 6);
     expect(shiftMinMaxIfNeeded({ x: 3, z: 3 }, w)).toEqual(w);
   });
 
-  it('player pasa midpoint en Z positivo → window desplaza +Z', () => {
+  it('player past midpoint in Z positive → window shifts +Z', () => {
     const w = window(0, 0, 6, 6);
     expect(shiftMinMaxIfNeeded({ x: 3, z: 4 }, w)).toEqual(window(0, 1, 6, 7));
   });
 
-  it('player bajo midpoint en X positivo (X>=0) → window desplaza -X', () => {
+  it('player below midpoint in X → window shifts -X', () => {
     const w = window(2, 0, 8, 6);
     expect(shiftMinMaxIfNeeded({ x: 4, z: 3 }, w)).toEqual(window(1, 0, 7, 6));
   });
 
-  it('shift negativo requiere player >= 0 (no entra en chunks negativos)', () => {
+  it('window shifts into negative chunks when player crosses midpoint below 0', () => {
     const w = window(0, 0, 6, 6);
-    expect(shiftMinMaxIfNeeded({ x: -1, z: 3 }, w)).toEqual(w);
+    expect(shiftMinMaxIfNeeded({ x: -1, z: 3 }, w)).toEqual(window(-1, 0, 5, 6));
   });
 
-  it('shift x y z simultaneos en una llamada', () => {
+  it('shifts x and z simultaneously in one call', () => {
     const w = window(0, 0, 6, 6);
     expect(shiftMinMaxIfNeeded({ x: 4, z: 4 }, w)).toEqual(window(1, 1, 7, 7));
   });
 
-  it('no muta el argumento de entrada', () => {
+  it('does not mutate the input argument', () => {
     const w = window(0, 0, 6, 6);
     shiftMinMaxIfNeeded({ x: 4, z: 4 }, w);
     expect(w).toEqual(window(0, 0, 6, 6));

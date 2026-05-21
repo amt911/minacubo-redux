@@ -288,11 +288,11 @@ export class ChunkManager {
     const midX = (min.x + max.x) / 2;
     const midZ = (min.z + max.z) / 2;
 
-    if (aux.z > midZ)       { min.z++; max.z++; needRebuild = true; }
-    else if (aux.z < midZ && aux.z >= 0) { min.z--; max.z--; needRebuild = true; }
+    if (aux.z > midZ)      { min.z++; max.z++; needRebuild = true; }
+    else if (aux.z < midZ) { min.z--; max.z--; needRebuild = true; }
 
-    if (aux.x > midX)       { min.x++; max.x++; needRebuild = true; }
-    else if (aux.x < midX && aux.x >= 0) { min.x--; max.x--; needRebuild = true; }
+    if (aux.x > midX)      { min.x++; max.x++; needRebuild = true; }
+    else if (aux.x < midX) { min.x--; max.x--; needRebuild = true; }
 
     if (!needRebuild) return false;
 
