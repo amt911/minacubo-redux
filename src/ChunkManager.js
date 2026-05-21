@@ -1,17 +1,9 @@
 // @ts-check
 import * as THREE from 'three';
-import * as estructuras from './estructuras.js';
-import * as PM from './ParametrosMundo.js';
 import { identifyChunk } from './chunkMath.js';
-import { terrainHeight } from './noise.js';
+import { createTerrainNoise, terrainHeight } from './noise.js';
+import { generateChunkBlocks } from './chunkGen.js';
 import { blockCastsShadow } from './BlockRegistry.js';
-
-function isNearOther(x, z, list) {
-  for (const p of list) {
-    if (Math.abs(x - p.x) <= 2 && Math.abs(z - p.z) <= 2) return true;
-  }
-  return false;
-}
 
 function isOnTree(x, z, list) {
   for (const p of list) {
@@ -25,7 +17,7 @@ export class ChunkManager {
    * @param {{
    *   TAM_CHUNK: number,
    *   DISTANCIA_RENDER: number,
-   *   noise: (x: number, y: number) => number,
+   *   seed: number,
    *   blockGeometries: Record<string, THREE.BufferGeometry>,
    *   blockMaterials: Record<string, THREE.Material | THREE.Material[]>,
    *   scene: THREE.Scene,
@@ -34,7 +26,8 @@ export class ChunkManager {
   constructor(opts) {
     this.TAM_CHUNK        = opts.TAM_CHUNK;
     this.DISTANCIA_RENDER = opts.DISTANCIA_RENDER;
-    this._noise           = opts.noise;
+    this.seed             = opts.seed;
+    this._noise           = createTerrainNoise(this.seed);
     this._geo             = opts.blockGeometries;
     this._mat             = opts.blockMaterials;
     this._scene           = opts.scene;
@@ -51,22 +44,20 @@ export class ChunkManager {
       max: { x: this.DISTANCIA_RENDER - 1, z: this.DISTANCIA_RENDER - 1 },
     };
 
-    // Per-chunk per-material InstancedMesh map. Indexed
-    // `chunkMeshes[chunkX][chunkZ][material]`.
     /** @type {Object<number, Object<number, Record<string, THREE.InstancedMesh>>>} */
     this.chunkMeshes = {};
-
-    // Flat list of every currently-live chunk mesh — used by raycasters.
     /** @type {THREE.InstancedMesh[]} */
     this.allMeshes = [];
 
-    // Override the shared block geometry bounding sphere so per-chunk meshes
-    // frustum-cull correctly. Three.js Frustum.intersectsObject reads
-    // geometry.boundingSphere (not mesh.boundingSphere) and multiplies it by
-    // mesh.matrixWorld. Per mesh we set mesh.position to the centroid of its
-    // blocks, so this sphere ends up centred on the data. The radius covers
-    // worst-case per-(chunk,material) extent: ~TC/2 in XZ + up to ~12 in Y
-    // for the tall stone+tree case, with margin.
+    // Mesh build queue — processed N items per frame from tick().
+    // Avoids freezing the main thread when many chunks finish at once.
+    /** @type {Array<{chunkX:number, chunkZ:number}>} */
+    this._meshQueue = [];
+    this._maxMeshBuildsPerFrame = 2;
+
+    // Override shared geometry boundingSphere for per-chunk frustum culling.
+    // See _createChunkMaterialMesh — mesh.position is set per chunk, this
+    // sphere then lands at the chunk centroid via matrixWorld.
     const sphereRadius = 20;
     for (const tipo in this._geo) {
       this._geo[tipo].boundingSphere = new THREE.Sphere(
@@ -74,13 +65,63 @@ export class ChunkManager {
         sphereRadius
       );
     }
+
+    // Worker pool for off-main-thread chunk data generation.
+    /** @type {Worker[]} */
+    this._workers = [];
+    this._workerIdx = 0;
+    /** @type {Map<number, (blocks: Array<{x:number,y:number,z:number,material:string}>) => void>} */
+    this._pendingChunks = new Map();
+    this._nextTaskId = 0;
+
+    const WORKER_COUNT = 4;
+    for (let i = 0; i < WORKER_COUNT; i++) {
+      const w = new Worker(new URL('./chunkWorker.js', import.meta.url), { type: 'module' });
+      w.onmessage = (e) => this._onWorkerMessage(e);
+      w.postMessage({ type: 'init', seed: this.seed });
+      this._workers.push(w);
+    }
   }
 
-  // ─── internal mesh helpers ────────────────────────────────────────────────
+  // ─── worker plumbing ──────────────────────────────────────────────────────
+
+  /**
+   * Request chunk block data from a worker.
+   * @param {number} chunkX
+   * @param {number} chunkZ
+   * @returns {Promise<Array<{x:number,y:number,z:number,material:string}>>}
+   */
+  _genChunkAsync(chunkX, chunkZ) {
+    return new Promise((resolve) => {
+      const id = this._nextTaskId++;
+      this._pendingChunks.set(id, resolve);
+      const worker = this._workers[this._workerIdx];
+      this._workerIdx = (this._workerIdx + 1) % this._workers.length;
+      worker.postMessage({ type: 'gen', id, chunkX, chunkZ, TC: this.TAM_CHUNK });
+    });
+  }
+
+  _onWorkerMessage(e) {
+    const data = e.data;
+    if (data.type === 'result') {
+      const resolve = this._pendingChunks.get(data.id);
+      if (resolve) {
+        this._pendingChunks.delete(data.id);
+        resolve(data.blocks);
+      }
+    }
+  }
+
+  _storeChunkData(chunkX, chunkZ, blocks) {
+    this.chunkCollision.push(blocks);
+    if (!this.chunk[chunkX]) this.chunk[chunkX] = [];
+    this.chunk[chunkX][chunkZ] = blocks;
+  }
+
+  // ─── mesh helpers ─────────────────────────────────────────────────────────
 
   /**
    * Build (or rebuild) every material mesh for one chunk from its block data.
-   * No-op when the chunk has no block data.
    * @param {number} chunkX
    * @param {number} chunkZ
    */
@@ -88,10 +129,7 @@ export class ChunkManager {
     const blocks = this.chunk[chunkX]?.[chunkZ];
     if (!blocks || blocks.length === 0) return;
 
-    // Build occupancy set covering this chunk + 8 neighbours so we can
-    // face-cull fully-buried blocks (every neighbour occupied → block hidden).
-    // Cheaper than per-face culling and still removes 50-70% of blocks in
-    // typical terrain.
+    // Face culling: drop blocks with all 6 neighbours occupied.
     const occupancy = new Set();
     for (let dx = -1; dx <= 1; dx++) {
       for (let dz = -1; dz <= 1; dz++) {
@@ -121,7 +159,6 @@ export class ChunkManager {
       }
     }
 
-    // Dispose anything we already had for this chunk.
     this._disposeChunkMesh(chunkX, chunkZ);
 
     if (!this.chunkMeshes[chunkX]) this.chunkMeshes[chunkX] = {};
@@ -132,19 +169,9 @@ export class ChunkManager {
     }
   }
 
-  /**
-   * Create one InstancedMesh holding all instances of `type` inside one chunk.
-   * @param {number} chunkX
-   * @param {number} chunkZ
-   * @param {string} type
-   * @param {Array<{x:number,y:number,z:number}>} list
-   */
   _createChunkMaterialMesh(chunkX, chunkZ, type, list) {
     const mesh = new THREE.InstancedMesh(this._geo[type], this._mat[type], list.length);
 
-    // Centroid of this material's blocks → mesh.position. The shared
-    // geometry sphere then ends up centred on the actual data after
-    // matrixWorld is applied, regardless of where blocks sit in Y.
     let sumX = 0, sumY = 0, sumZ = 0;
     for (let i = 0; i < list.length; i++) {
       sumX += list[i].x;
@@ -178,11 +205,6 @@ export class ChunkManager {
     this.allMeshes.push(mesh);
   }
 
-  /**
-   * Dispose every material mesh for one chunk (removes from scene + allMeshes).
-   * @param {number} chunkX
-   * @param {number} chunkZ
-   */
   _disposeChunkMesh(chunkX, chunkZ) {
     const chunkObj = this.chunkMeshes[chunkX]?.[chunkZ];
     if (!chunkObj) return;
@@ -197,17 +219,8 @@ export class ChunkManager {
   }
 
   /**
-   * Rebuild one chunk's mesh for a single material (after a block add/remove).
-   * If no blocks of that material remain, the existing mesh is disposed.
-   * @param {number} chunkX
-   * @param {number} chunkZ
-   * @param {string} type
-   */
-  /**
-   * Rebuild this chunk's meshes after a block add/remove. Face culling
-   * makes neighbour visibility depend on neighbour data, so rebuild the
-   * 4 cardinal-neighbour chunks too. `type` is kept for API compatibility
-   * but no longer used — we rebuild every material in each touched chunk.
+   * Rebuild this chunk + 4 cardinal-neighbour chunks after a block edit.
+   * `type` kept for API compatibility, unused.
    * @param {number} chunkX
    * @param {number} chunkZ
    * @param {string} _type
@@ -220,117 +233,76 @@ export class ChunkManager {
     this._buildChunkMesh(chunkX, chunkZ + 1);
   }
 
-  // ─── chunk data generation ────────────────────────────────────────────────
-
-  /**
-   * Generate blocks for one chunk column at grid coords (chunkI, chunkJ).
-   * @returns {{ blocks: Array<{x:number,y:number,z:number,material:string}>, treeList: Array<{x:number,y:number,z:number}> }}
-   */
-  _generateChunkBlocks(chunkI, chunkJ) {
-    const TC = this.TAM_CHUNK;
-    const S  = PM.PIXELES_ESTANDAR;
-
-    const nArboles = Math.floor(Math.random() * TC / 5);
-    const treeList = [];
-
-    for (let m = 0; m < nArboles; m++) {
-      let px = Math.floor(Math.random() * TC);
-      let pz = Math.floor(Math.random() * TC);
-      while (isNearOther(px, pz, treeList)) {
-        px = Math.floor(Math.random() * TC);
-        pz = Math.floor(Math.random() * TC);
-      }
-      treeList.push({ x: px, y: 10, z: pz });
-    }
-
-    const blocks = [];
-    for (let x = chunkI * TC; x < chunkI * TC + TC; x++) {
-      for (let z = chunkJ * TC; z < chunkJ * TC + TC; z++) {
-        const v = terrainHeight(this._noise, x, z);
-        blocks.push({ x: x * 16 / S, y: v - 8 / S,         z: z * 16 / S, material: 'Grass' });
-        for (let s = 0; s < 3; s++)
-          blocks.push({ x: x * 16 / S, y: v - 8 / S - s - 1, z: z * 16 / S, material: 'Dirt' });
-        for (let r = 3; r < 8; r++)
-          blocks.push({ x: x * 16 / S, y: v - 8 / S - r - 1, z: z * 16 / S, material: 'Stone' });
-
-        for (const arbol of treeList) {
-          if (arbol.x + chunkI * TC === x && arbol.z + chunkJ * TC === z) {
-            arbol.y = v + 0.5;
-            arbol.x = arbol.x + chunkI * TC;
-            arbol.z = arbol.z + chunkJ * TC;
-          }
-        }
-      }
-    }
-
-    for (const treeOrigin of treeList) {
-      const arbol = new estructuras.OakTree();
-      for (const b of arbol.leaves)
-        blocks.push({ x: treeOrigin.x + b.x, y: treeOrigin.y + b.y - 0.5, z: treeOrigin.z + b.z, material: 'OakLeaves' });
-      for (const b of arbol.woodBlocks)
-        blocks.push({ x: treeOrigin.x + b.x, y: treeOrigin.y + b.y - 0.5, z: treeOrigin.z + b.z, material: 'OakWood' });
-    }
-
-    return { blocks, treeList };
-  }
-
   // ─── public API ───────────────────────────────────────────────────────────
 
   /**
-   * Generate the initial world. Returns NPC spawn data.
+   * Synchronously generate chunk (0,0) for NPC spawn data, then queue every
+   * other visible chunk to the worker pool. Meshes for non-spawn chunks are
+   * built progressively by tick() as their data arrives.
    * @returns {{ zombieSpawn: {x:number,y:number,z:number}, pigWaypoints: Array<{x:number,y:number,z:number}> }}
    */
   init() {
     const TC = this.TAM_CHUNK;
     const DR = this.DISTANCIA_RENDER;
 
-    let zombieSpawn = { x: 0, y: 0, z: 0 };
+    // Sync gen chunk (0,0) so we have something to look at + NPC spawn data.
+    const getHeight = (x, z) => terrainHeight(this._noise, x, z);
+    const { blocks: spawnBlocks, treeList } = generateChunkBlocks(getHeight, 0, 0, TC);
+    this._storeChunkData(0, 0, spawnBlocks);
+
+    const zombieLX = Math.floor(Math.random() * TC);
+    const zombieLZ = Math.floor(Math.random() * TC);
+    const zombieY  = terrainHeight(this._noise, zombieLX, zombieLZ);
+    const zombieSpawn = { x: zombieLX, y: zombieY, z: zombieLZ };
+
     const pigWaypoints = [];
+    const nPigPoints = Math.floor(Math.random() * TC / 4) + 2;
+    for (let m = 0; m < nPigPoints; m++) {
+      let px = Math.floor(Math.random() * TC);
+      let pz = Math.floor(Math.random() * TC);
+      while (isOnTree(px, pz, treeList)) {
+        px = Math.floor(Math.random() * TC);
+        pz = Math.floor(Math.random() * TC);
+      }
+      const py = terrainHeight(this._noise, px, pz);
+      pigWaypoints.push({ x: px, y: py, z: pz });
+    }
 
-    // Generate chunk data (no rendering yet).
+    // Queue worker gen for every other chunk in the initial window.
     for (let i = 0; i < DR; i++) {
       for (let j = 0; j < DR; j++) {
-        const { blocks, treeList } = this._generateChunkBlocks(i, j);
-        this.chunkCollision.push(blocks);
-        if (!this.chunk[i]) this.chunk[i] = [];
-        this.chunk[i][j] = blocks;
-
-        // Place zombie + pig spawn data inside chunk (0,0).
-        if (i === 0 && j === 0) {
-          const zombieLX = Math.floor(Math.random() * TC);
-          const zombieLZ = Math.floor(Math.random() * TC);
-          const zombieY  = terrainHeight(this._noise, zombieLX, zombieLZ);
-          zombieSpawn = { x: zombieLX, y: zombieY, z: zombieLZ };
-
-          const nPigPoints = Math.floor(Math.random() * TC / 4) + 2;
-          for (let m = 0; m < nPigPoints; m++) {
-            let px = Math.floor(Math.random() * TC);
-            let pz = Math.floor(Math.random() * TC);
-            while (isOnTree(px, pz, treeList)) {
-              px = Math.floor(Math.random() * TC);
-              pz = Math.floor(Math.random() * TC);
-            }
-            const py = terrainHeight(this._noise, px, pz);
-            pigWaypoints.push({ x: px, y: py, z: pz });
-          }
-        }
+        if (i === 0 && j === 0) continue;
+        this._genChunkAsync(i, j).then((blocks) => {
+          this._storeChunkData(i, j, blocks);
+          this._meshQueue.push({ chunkX: i, chunkZ: j });
+        });
       }
     }
 
-    // Build per-chunk meshes for the visible window.
-    for (let i = 0; i < DR; i++) {
-      for (let j = 0; j < DR; j++) {
-        this._buildChunkMesh(i, j);
-      }
-    }
+    // Show chunk (0,0) immediately so the player isn't staring at void.
+    this._buildChunkMesh(0, 0);
 
     return { zombieSpawn, pigWaypoints };
   }
 
   /**
-   * Slide the visible window if the player has crossed its midpoint.
-   * Disposes chunk meshes that left the window and builds meshes for the
-   * chunks that entered.
+   * Drain a few mesh builds from the queue. Call once per frame.
+   */
+  tick() {
+    let count = 0;
+    while (count < this._maxMeshBuildsPerFrame && this._meshQueue.length > 0) {
+      const { chunkX, chunkZ } = this._meshQueue.shift();
+      // Skip if chunk no longer in window (was disposed during scroll).
+      const { min, max } = this.chunkMinMax;
+      if (chunkX < min.x || chunkX > max.x || chunkZ < min.z || chunkZ > max.z) continue;
+      this._buildChunkMesh(chunkX, chunkZ);
+      count++;
+    }
+  }
+
+  /**
+   * Slide the window if the player crossed its midpoint. Disposes chunks
+   * that left, async-generates new chunks (mesh build queued for tick()).
    * @param {number} playerX
    * @param {number} playerZ
    * @returns {boolean} true if window moved
@@ -352,17 +324,6 @@ export class ChunkManager {
 
     if (!moved) return false;
 
-    // Generate chunk data for any new slots in the window.
-    for (let a = min.z; a <= max.z; a++) {
-      for (let i = min.x; i <= max.x; i++) {
-        if (this.chunk[i]?.[a]) continue;
-        if (!this.chunk[i]) this.chunk[i] = [];
-        const { blocks } = this._generateChunkBlocks(i, a);
-        this.chunkCollision.push(blocks);
-        this.chunk[i][a] = blocks;
-      }
-    }
-
     // Dispose meshes for chunks that left the window.
     for (let a = oldMinZ; a <= oldMaxZ; a++) {
       for (let i = oldMinX; i <= oldMaxX; i++) {
@@ -372,11 +333,20 @@ export class ChunkManager {
       }
     }
 
-    // Build meshes for chunks that entered the window.
+    // For each chunk in the new window: ensure data + queue mesh build.
     for (let a = min.z; a <= max.z; a++) {
       for (let i = min.x; i <= max.x; i++) {
-        if (this.chunkMeshes[i]?.[a]) continue;
-        this._buildChunkMesh(i, a);
+        if (this.chunkMeshes[i]?.[a]) continue; // already rendered
+        if (this.chunk[i]?.[a]) {
+          // Data already exists (player walked back) — queue mesh rebuild.
+          this._meshQueue.push({ chunkX: i, chunkZ: a });
+        } else {
+          // Need fresh data from worker.
+          this._genChunkAsync(i, a).then((blocks) => {
+            this._storeChunkData(i, a, blocks);
+            this._meshQueue.push({ chunkX: i, chunkZ: a });
+          });
+        }
       }
     }
 

@@ -19,7 +19,6 @@ import { NPCManager } from './NPCManager.js'
 import { BLOCK_TYPES, blockMaterials, blockGeometries } from './BlockRegistry.js'
 import * as PM from './ParametrosMundo.js'
 import { identifyChunk } from './chunkMath.js'
-import { createTerrainNoise } from './noise.js'
 
 /// La clase fachada del modelo
 /**
@@ -89,11 +88,11 @@ class MyScene extends THREE.Scene {
     this.blockMaterials = blockMaterials;
     this.blockGeometries = blockGeometries;
 
-    const noise = createTerrainNoise();
+    const seed = Math.floor(Math.random() * 0xffffffff);
     this.chunkManager = new ChunkManager({
       TAM_CHUNK:        this.TAM_CHUNK,
       DISTANCIA_RENDER: this.DISTANCIA_RENDER,
-      noise,
+      seed,
       blockGeometries:  this.blockGeometries,
       blockMaterials:   this.blockMaterials,
       scene:            this,
@@ -249,7 +248,7 @@ class MyScene extends THREE.Scene {
   static _loadRenderDistance() {
     try {
       const v = parseInt(localStorage.getItem('renderDistance') ?? '9', 10);
-      if (Number.isFinite(v) && v >= 3 && v <= 15) return v;
+      if (Number.isFinite(v) && v >= 3 && v <= 32) return v;
     } catch { /* localStorage may be unavailable */ }
     return 9;
   }
@@ -579,6 +578,8 @@ class MyScene extends THREE.Scene {
     this.renderer.render(this, this.getCamera());
 
     this.chunkManager.updateScroll(this.model.position.x, this.model.position.z);
+    // Drain a few queued mesh builds (worker results land here).
+    this.chunkManager.tick();
 
 
     // Feedback throttled a ~10Hz: el raycaster contra cada InstancedMesh
