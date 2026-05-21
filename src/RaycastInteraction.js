@@ -100,12 +100,13 @@ export class RaycastInteraction {
 
   /** @param {MouseEvent} event */
   onMouseDown(event) {
-    if (event.which === 3) {
+    // event.button: 0 = left, 1 = middle, 2 = right. event.which is deprecated.
+    if (event.button === 2) {
       this._rightDragStart = { x: event.clientX, y: event.clientY };
       return;
     }
 
-    if (event.which !== 1) return;
+    if (event.button !== 0) return;
 
     const mouse = new THREE.Vector2(0, 0);
     const raycaster = new THREE.Raycaster();
@@ -128,7 +129,7 @@ export class RaycastInteraction {
 
   /** @param {MouseEvent} event */
   onMouseUp(event) {
-    if (event.which !== 3) return;
+    if (event.button !== 2) return;
     if (!this._rightDragStart) return;
 
     const dx = event.clientX - this._rightDragStart.x;
