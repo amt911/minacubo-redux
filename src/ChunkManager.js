@@ -59,9 +59,6 @@ export class ChunkManager {
     // Flat list of every currently-live chunk mesh — used by raycasters.
     /** @type {THREE.InstancedMesh[]} */
     this.allMeshes = [];
-
-    // Generous bounding-sphere radius covering one chunk (12-wide cube + tree).
-    this._chunkSphereRadius = Math.hypot(this.TAM_CHUNK, this.TAM_CHUNK) / 2 + 12;
   }
 
   // ─── internal mesh helpers ────────────────────────────────────────────────
@@ -111,18 +108,12 @@ export class ChunkManager {
     mesh.count = list.length;
     mesh.instanceMatrix.needsUpdate = true;
 
-    // Manual bounding sphere — covers one chunk so Three.js frustum-culls it
-    // when the chunk lies outside the camera view.
-    const TC = this.TAM_CHUNK;
-    const S = PM.PIXELES_ESTANDAR;
-    mesh.boundingSphere = new THREE.Sphere(
-      new THREE.Vector3(
-        chunkX * TC + TC / 2 * (16 / S),
-        0,
-        chunkZ * TC + TC / 2 * (16 / S)
-      ),
-      this._chunkSphereRadius
-    );
+    // Compute bounding sphere from actual instance matrices — Three.js
+    // InstancedMesh has its own method that iterates the matrices.
+    // Without this, frustum culling uses the unit-cube geometry sphere at
+    // world origin → all chunks share one wrong sphere and disappear when
+    // the camera turns away from origin.
+    mesh.computeBoundingSphere();
     mesh.frustumCulled = true;
     mesh.castShadow = blockCastsShadow(type);
     mesh.receiveShadow = true;
