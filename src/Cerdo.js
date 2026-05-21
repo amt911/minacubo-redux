@@ -1,28 +1,22 @@
 import * as THREE from 'three';
 import * as C from './colisiones.js';
 import * as PM from './ParametrosMundo.js';
+import { NPC } from './NPC.js';
 
 
-//IMPORTANTE: LA CAMARA SE CENTRA EN LA CABEZA Y PIVOTA ALREDEDOR DE LA MISMA
-class Cerdo extends THREE.Object3D {
-  degToRad(deg){
-    return deg*(Math.PI/180)
-  }
+class Pig extends NPC {
   constructor(gui,titleGui) {
     super();
-    //this.clock=new THREE.Clock();
-    this.cambiarAnimacion=false;
-    this.maxMovimientoExt=this.degToRad(45);
     //this.camara3rdPerson=new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    // Se crea la parte de la interfaz que corresponde a la caja
-    // Se crea primero porque otros métodos usan las variables que se definen para la interfaz
+    // GUI panel — created first because other methods reference its variables
+
     this.createGUI(gui,titleGui);
 
     this.target=new THREE.Vector3(10, -5, 0);
     this.material = new THREE.MeshPhongMaterial({color: 0x2dc100});
         const textureLoader = new THREE.TextureLoader();
 
-        this.colision=new C.Colisiones(true, 0.8);
+        this.physics=new C.Collisions(true, 0.8);
 
     //HOCICO
 
@@ -209,15 +203,16 @@ class Cerdo extends THREE.Object3D {
 
 
 
-    const boundingBoxGeom = new THREE.BoxGeometry(10 / PM.PIXELES_ESTANDAR, /*14*/32 / PM.PIXELES_ESTANDAR, 16 / PM.PIXELES_ESTANDAR);
-    this.boundingBox = new THREE.Mesh(boundingBoxGeom, new THREE.MeshPhongMaterial());
-    this.boundingBox.position.y += 24/PM.PIXELES_ESTANDAR;//32 / PM.PIXELES_ESTANDAR
-
-    this.altura=32
+    this._initPhysics(
+      new THREE.BoxGeometry(10 / PM.PIXELES_ESTANDAR, 32 / PM.PIXELES_ESTANDAR, 16 / PM.PIXELES_ESTANDAR),
+      24 / PM.PIXELES_ESTANDAR,
+      45
+    );
+    this.height=32;
   }
 
   createGUI (gui,titleGui) {
-    // Controles para el tamaño, la orientación y la posición de la caja
+    // size, orientation, and position controls
     this.guiControls = {
       cabezaX: 0,
       cabezaY: 0,
@@ -227,8 +222,8 @@ class Cerdo extends THREE.Object3D {
       brazoL: 0,
       brazoR: 0,
 
-      // Un botón para dejarlo todo en su posición inicial
-      // Cuando se pulse se ejecutará esta función.
+      // reset button
+
       reset : () => {
         this.guiControls.cabezaX=0;
         this.guiControls.cabezaY=0;
@@ -240,11 +235,11 @@ class Cerdo extends THREE.Object3D {
       }
     }
 
-    // Se crea una sección para los controles de la caja
+    // controls section
     var folder = gui.addFolder (titleGui);
-    // Estas lineas son las que añaden los componentes de la interfaz
-    // Las tres cifras indican un valor mínimo, un máximo y el incremento
-    // El método   listen()   permite que si se cambia el valor de la variable en código, el deslizador de la interfaz se actualice
+    // GUI sliders
+
+
     folder.add (this.guiControls, 'cabezaY', -Math.PI/2, Math.PI/2, 0.1).name ('Cabeza Y : ').listen();
     folder.add (this.guiControls, 'cabezaX', -Math.PI/2, Math.PI/2, 0.1).name ('Cabeza X : ').listen();
 
@@ -259,43 +254,35 @@ class Cerdo extends THREE.Object3D {
     folder.add (this.guiControls, 'reset').name ('[ Reset ]');
   }
 
-  animacion(esForward, velocidad){
-    const velFinal=(esForward)? velocidad : -velocidad;
+  animacion(isForward, speed){
+    const finalSpeed=(isForward)? speed : -speed;
 
     if (this.cambiarAnimacion) {
-      this.pataLeftDel.rotation.x += velFinal
-      this.pataRightDel.rotation.x -= velFinal
-      this.pataLeftTras.rotation.x -= velFinal
-      this.pataRightTras.rotation.x += velFinal
+      this.pataLeftDel.rotation.x += finalSpeed
+      this.pataRightDel.rotation.x -= finalSpeed
+      this.pataLeftTras.rotation.x -= finalSpeed
+      this.pataRightTras.rotation.x += finalSpeed
 
-      if ((esForward && this.pataRightDel.rotation.x <= -this.maxMovimientoExt) || (!esForward && this.pataRightDel.rotation.x >= this.maxMovimientoExt)) {
+      if ((isForward && this.pataRightDel.rotation.x <= -this.maxMovimientoExt) || (!isForward && this.pataRightDel.rotation.x >= this.maxMovimientoExt)) {
         this.cambiarAnimacion = false;
       }
     }
     else {
-      this.pataLeftDel.rotation.x += -velFinal
-      this.pataRightDel.rotation.x -= -velFinal
-      this.pataLeftTras.rotation.x -= -velFinal
-      this.pataRightTras.rotation.x += -velFinal
+      this.pataLeftDel.rotation.x += -finalSpeed
+      this.pataRightDel.rotation.x -= -finalSpeed
+      this.pataLeftTras.rotation.x -= -finalSpeed
+      this.pataRightTras.rotation.x += -finalSpeed
 
-      if ((esForward && this.pataRightDel.rotation.x >= this.maxMovimientoExt) || (!esForward && this.pataRightDel.rotation.x <= -this.maxMovimientoExt)) {
+      if ((isForward && this.pataRightDel.rotation.x >= this.maxMovimientoExt) || (!isForward && this.pataRightDel.rotation.x <= -this.maxMovimientoExt)) {
         this.cambiarAnimacion = true;
       }
     }
   }
 
-  update (bloques, deltaMov) {
-    const velocidad =  deltaMov * 4.317;
-    this.animacion(true, velocidad)
-
-    
-    const vectorMovimiento = new THREE.Vector3(0, 0, 1);
-    //vectormovimiento es el vector entre el modelo y el zombie
-    this.translateOnAxis(vectorMovimiento.normalize(), velocidad);
-    this.boundingBox.translateOnAxis(vectorMovimiento, velocidad);
-
-     this.colision.update(bloques, this, this.boundingBox, null, vectorMovimiento, velocidad);
+  update(bloques, delta) {
+    this._stepPhysics(bloques, delta);
   }
 }
 
-export { Cerdo };
+export { Pig };
+export { Pig as Cerdo };

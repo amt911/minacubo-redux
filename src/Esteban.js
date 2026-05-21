@@ -2,8 +2,8 @@ import * as THREE from 'three'
 import * as PM from './ParametrosMundo.js'
 import * as C from './colisiones.js'
 
-//IMPORTANTE: LA CAMARA SE CENTRA EN LA CABEZA Y PIVOTA ALREDEDOR DE LA MISMA
-class Esteban extends THREE.Object3D {
+// IMPORTANT: camera centers on head and pivots around it
+class Player extends THREE.Object3D {
   degToRad(deg) {
     return deg * (Math.PI / 180)
   }
@@ -16,11 +16,11 @@ class Esteban extends THREE.Object3D {
 
     this.clock = new THREE.Clock();
 
-    this.cambiarAnimacion = false;
-    this.maxMovimientoExt = this.degToRad(60);
+    this.flipAnim = false;
+    this.maxLimbAngle = this.degToRad(60);
 
-    // Se crea la parte de la interfaz que corresponde a la caja
-    // Se crea primero porque otros métodos usan las letiables que se definen para la interfaz
+    // GUI panel — created first because other methods reference its variables
+
     this.createGUI(gui, titleGui);
 
     const textureLoader = new THREE.TextureLoader();
@@ -45,7 +45,7 @@ class Esteban extends THREE.Object3D {
       }),
     ];
 
-    //CABEZA
+    // HEAD
     const geometriaCabeza = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
 
     const cabeza = new THREE.Mesh(geometriaCabeza, texturaCabeza);
@@ -59,7 +59,7 @@ class Esteban extends THREE.Object3D {
 
     //this.add(this.cabezaW1);
 
-    //BRAZOS Y PIERNAS
+    // ARMS AND LEGS
 
     const texturabrazoR = [
       new THREE.MeshPhongMaterial({
@@ -128,7 +128,7 @@ class Esteban extends THREE.Object3D {
     this.brazoRightW1.position.x = -6 / PM.PIXELES_ESTANDAR;
     this.brazoRightW1.add(this.brazoRight);
 
-    //Piernas
+    // LEGS
 
     const texturaPiernaR = [
       new THREE.MeshPhongMaterial({
@@ -171,7 +171,7 @@ class Esteban extends THREE.Object3D {
         map: textureLoader.load("./texturas/esteban/piernazneg.png"),
       }),
     ];
-    //Izquierda
+    // LEFT
     const piernaL = new THREE.Mesh(geometriaExtremidad, texturaPiernaL);
     const piernaR = new THREE.Mesh(geometriaExtremidad, texturaPiernaR);
 
@@ -207,13 +207,13 @@ class Esteban extends THREE.Object3D {
         map: textureLoader.load("./texturas/esteban/cuerpozneg.png"),
       }),
     ];
-    //TORSO
+    // TORSO
     const geometriaTorso = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 12 / PM.PIXELES_ESTANDAR, 4 / PM.PIXELES_ESTANDAR);
 
     const torso = new THREE.Mesh(geometriaTorso, texturaCuerpo);
     torso.position.y = 18 / PM.PIXELES_ESTANDAR;
 
-    //ESTO ES NECESARIO PARA QUE FUNCIONE LA ANIMACION DE STRAFE
+    // required for strafe animation to work
     this.wrapperFinal = new THREE.Object3D();
 
     this.wrapperFinal.add(this.cabezaW1)
@@ -231,9 +231,9 @@ class Esteban extends THREE.Object3D {
 
     this.position.y += 10;
 
-    this.colisiones=new C.Colisiones(false, 0.8);
-    this.puedeSaltar=true;
-    this.altura=32;
+    this.physics=new C.Collisions(false, 0.8);
+    this.canJump=true;
+    this.height=32;
   }
 
   addCamara(camara) {
@@ -253,34 +253,34 @@ class Esteban extends THREE.Object3D {
   }
 
 
-  animacion(esForward, velocidad){
-    const velFinal=(esForward)? velocidad : -velocidad;
+  animacion(isForward, speed){
+    const finalSpeed=(isForward)? speed : -speed;
 
-    if (this.cambiarAnimacion) {
-      this.piernaLW1.rotation.x += velFinal
-      this.piernaRW1.rotation.x -= velFinal
-      this.brazoLeft.rotation.x -= velFinal
-      this.brazoRight.rotation.x += velFinal
+    if (this.flipAnim) {
+      this.piernaLW1.rotation.x += finalSpeed
+      this.piernaRW1.rotation.x -= finalSpeed
+      this.brazoLeft.rotation.x -= finalSpeed
+      this.brazoRight.rotation.x += finalSpeed
 
-      if ((esForward && this.piernaRW1.rotation.x <= -this.maxMovimientoExt) || (!esForward && this.piernaRW1.rotation.x >= this.maxMovimientoExt)) {
-        this.cambiarAnimacion = false;
+      if ((isForward && this.piernaRW1.rotation.x <= -this.maxLimbAngle) || (!isForward && this.piernaRW1.rotation.x >= this.maxLimbAngle)) {
+        this.flipAnim = false;
       }
     }
     else {
-      this.piernaLW1.rotation.x += -velFinal
-      this.piernaRW1.rotation.x -= -velFinal
-      this.brazoLeft.rotation.x -= -velFinal
-      this.brazoRight.rotation.x += -velFinal
+      this.piernaLW1.rotation.x += -finalSpeed
+      this.piernaRW1.rotation.x -= -finalSpeed
+      this.brazoLeft.rotation.x -= -finalSpeed
+      this.brazoRight.rotation.x += -finalSpeed
 
-      if ((esForward && this.piernaRW1.rotation.x >= this.maxMovimientoExt) || (!esForward && this.piernaRW1.rotation.x <= -this.maxMovimientoExt)) {
-        this.cambiarAnimacion = true;
+      if ((isForward && this.piernaRW1.rotation.x >= this.maxLimbAngle) || (!isForward && this.piernaRW1.rotation.x <= -this.maxLimbAngle)) {
+        this.flipAnim = true;
       }
     }
   }
 
-  update(bloques, teclasPulsadas) {
+  update(blocks, keysPressed) {
     const delta= this.clock.getDelta();
-    const velocidad = delta * 4.317;
+    const speed = delta * 4.317;
     // Derive orientation from camera geometry — works regardless of whether
     // OrbitControls or pointer-lock mode is driving the camera.
     const cp = this.cameraControls.object.position;
@@ -297,50 +297,50 @@ class Esteban extends THREE.Object3D {
     const vectorDir=new THREE.Vector3(0, 0, 0);
 
     let moviendose=false;
-    let esForward=true;
+    let isForward=true;
     
-    if(teclasPulsadas.W){
+    if(keysPressed.W){
       vectorDir.z+=1;
       moviendose = true;
     }
-    if(teclasPulsadas.S){
+    if(keysPressed.S){
       vectorDir.z-=1;
       moviendose = true;
-      esForward=false;
+      isForward=false;
     }
-    if(teclasPulsadas.A){
+    if(keysPressed.A){
       vectorDir.x+=1;
       moviendose = true;
     }
-    if(teclasPulsadas.D){
+    if(keysPressed.D){
       vectorDir.x-=1;
       moviendose = true;
     }
 
-    if((teclasPulsadas.A && teclasPulsadas.W) || (teclasPulsadas.D && teclasPulsadas.S)){
+    if((keysPressed.A && keysPressed.W) || (keysPressed.D && keysPressed.S)){
       if (this.wrapperFinal.rotation.y < this.degToRad(45)) {
         this.wrapperFinal.rotation.y += 8*delta;
       }      
     }
-    else if((teclasPulsadas.A && teclasPulsadas.S) || (teclasPulsadas.D && teclasPulsadas.W)){
+    else if((keysPressed.A && keysPressed.S) || (keysPressed.D && keysPressed.W)){
       if (this.wrapperFinal.rotation.y > this.degToRad(-45)) {
         this.wrapperFinal.rotation.y -= 8*delta;
       }            
     }
-    else if(teclasPulsadas.A){
+    else if(keysPressed.A){
       if (this.wrapperFinal.rotation.y < this.degToRad(45)) {
         this.wrapperFinal.rotation.y += 8*delta;
       }      
     }
-    else if(teclasPulsadas.D){
+    else if(keysPressed.D){
       if (this.wrapperFinal.rotation.y > this.degToRad(-45)) {
         this.wrapperFinal.rotation.y -= 8*delta;
       }
     }
-    else if(teclasPulsadas.W){
+    else if(keysPressed.W){
       this.wrapperFinal.rotation.y = 0;
     }
-    else if(teclasPulsadas.S){
+    else if(keysPressed.S){
       if (this.wrapperFinal.rotation.y < 0) {
         this.wrapperFinal.rotation.y += 8*delta;
 
@@ -355,21 +355,22 @@ class Esteban extends THREE.Object3D {
       }
     }
 
-    const velocidadFinal=(teclasPulsadas["SHIFT"])? velocidad*2 : velocidad;
+    const finalSpeed=(keysPressed["SHIFT"])? speed*2 : speed;
 
     if(moviendose)
-      this.animacion(esForward, velocidadFinal);
+      this.animacion(isForward, finalSpeed);
 
-    // vectorDir esta en LOCAL space del personaje (W = +Z local). Antes
-    // Esteban llamaba a this.translateOnAxis(vectorDir, ...), que aplica
-    // internamente la rotacion del Object3D para convertir el eje local a
-    // world space. Ahora que colisiones.update recibe el vector y lo trata
+    // moveDir is in LOCAL space (W = +Z local). Collisions.update treats it
+
+
+    // as a world-space delta, so rotate here — otherwise W stops meaning
     // como delta world, hay que rotarlo aqui o W deja de ser "hacia donde
-    // mira la camara" cuando la camara orbita (bug de desincronizacion
-    // teclado/camara reportado).
+
+
     const worldDir = vectorDir.clone().applyQuaternion(this.quaternion);
-    this.colisiones.update(bloques, this, this.boundingBox, teclasPulsadas, worldDir, velocidad);
+    this.physics.update(blocks, this, this.boundingBox, keysPressed, worldDir, speed);
   }
 }
 
-export { Esteban };
+export { Player };
+export { Player as Esteban };

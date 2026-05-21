@@ -5,11 +5,10 @@
  * @typedef {{min: Vec3, max: Vec3}} AABB
  */
 
-// Espesor de la "sonda" para detectar suelo justo debajo de los pies. No
-// es un EPS de snap: snap se hace a la cara exacta (sin offset) para que
-// un hueco de exactamente la altura del jugador deje pasar al andar y
-// bloquee al saltar. La sonda solo sirve para que `onGround` siga true
-// cuando el jugador descansa sobre un bloque sin movimiento en Y.
+// Thickness of the ground probe just below the feet. Not a snap EPS:
+// snap is done to the exact face (no offset) so a gap exactly one player
+// tall lets you walk through but blocks jumping. The probe only keeps
+// `onGround` true when the player rests on a block with no Y movement.
 const GROUND_PROBE = 1e-4;
 
 const cloneAABB = (a) => ({
@@ -23,13 +22,11 @@ const shiftAABB = (a, axis, amount) => {
 };
 
 /**
- * Interseccion AABB-AABB ESTRICTA: caras coincidentes NO cuentan como
- * colision. Diferente al `aabbIntersect` general de `aabb.js` (que cuenta
- * tangencia como interseccion). Aqui necesitamos estricta para que el
- * player pueda pasar por debajo de un techo cuya cara inferior esta
- * exactamente al nivel de su cabeza — situacion comun en estructuras de
- * 2 bloques de altura sobre suelo plano (e.g. hojas inferiores de arbol
- * a y=2.5 cuando el player de 2 bloques tiene la cabeza en y=2).
+ * Strict AABB-AABB intersection: touching faces do NOT count as a hit.
+ * Unlike the general `aabbIntersect` in `aabb.js` (which counts tangency),
+ * we need strict here so the player can pass under a ceiling whose bottom
+ * face is exactly at head height — common in 2-block-tall structures
+ * (e.g. lower leaves at y=2.5 when the 2-block-tall player has head at y=2).
  */
 const aabbIntersectStrict = (a, b) =>
   a.min.x < b.max.x && a.max.x > b.min.x &&
@@ -60,12 +57,11 @@ export function resolveMovement(currentAABB, delta, blocks) {
   const sizeY = currentAABB.max.y - currentAABB.min.y;
   const sizeZ = currentAABB.max.z - currentAABB.min.z;
 
-  // Sub-stepping: si el delta es mayor que medio bloque, lo dividimos en
-  // sub-pasos. Sin esto, una caida rapida (delta.y muy negativo) o un
-  // ataque diagonal a alta velocidad pueden "tunelar" — el AABB se shiftea
-  // tan lejos en un paso que pasa por encima del bloque sin intersectar.
-  // 0.5 unidades = medio bloque, garantiza que cualquier bloque entre la
-  // posicion previa y la nueva sea detectado.
+  // Sub-stepping: if the delta exceeds half a block we split into sub-steps.
+  // Without this, a fast fall (large negative delta.y) or a diagonal sprint
+  // can tunnel — the AABB shifts so far in one step that it skips over a
+  // block without intersecting. 0.5 units = half a block, guarantees any
+  // block between the old and new position is detected.
   const maxAbs = Math.max(Math.abs(delta.x), Math.abs(delta.y), Math.abs(delta.z));
   const steps = Math.max(1, Math.ceil(maxAbs / MAX_STEP));
   const dx = delta.x / steps;
@@ -126,11 +122,10 @@ export function resolveMovement(currentAABB, delta, blocks) {
     }
   }
 
-  // Ground probe: sonda fina justo debajo de los pies. Sin esto, tras
-  // aterrizar en una cara exacta (sin EPS), strict intersect ya no detecta
-  // contacto con el suelo en frames idle (dy=0 → eje Y omitido). Probar un
-  // slab de GROUND_PROBE de alto separa la deteccion de suelo de la del
-  // resto de colisiones.
+  // Ground probe: thin slab just below the feet. Without this, after landing
+  // on an exact face (no EPS), strict intersect no longer detects ground
+  // contact on idle frames (dy=0 → Y axis skipped). A GROUND_PROBE-tall slab
+  // decouples ground detection from the rest of collision resolution.
   let onGround = false;
   const probe = {
     min: { x: aabb.min.x, y: aabb.min.y - GROUND_PROBE, z: aabb.min.z },

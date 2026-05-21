@@ -4,53 +4,48 @@ import * as PM from './ParametrosMundo.js';
 import { resolveMovement, blockCentersToAABBs } from './voxelPhysics.js';
 
 /**
- * Colisiones del personaje contra los bloques del mundo. La logica
- * detallada (axis-separated sweep, sub-stepping, snap por cara) vive en
- * `voxelPhysics.js` como funcion pura testeable. Esta clase es solo el
- * adaptador entre el mundo del juego (personaje, boundingBox, gravedad,
- * salto) y esa funcion.
+ * Character collision against world blocks. Detailed physics logic
+ * (axis-separated sweep, sub-stepping, face snap) lives in `voxelPhysics.js`
+ * as a pure testable function. This class is only the adapter between the
+ * game world (entity, boundingBox, gravity, jump) and that function.
  */
-class Colisiones {
-  constructor(autojump, mitad) {
+class Collisions {
+  constructor(autojump, half) {
     this.autojump = autojump;
-    this.mitad = mitad;
+    this.half = half;
     this.clock = new THREE.Clock();
-    this.caidaVel = -1;
-    this.caidaAcc = -42;
+    this.fallVel = -1;
+    this.fallAcc = -42;
   }
 
   /**
-   * Avanza un frame de fisica para el personaje.
+   * Advance one physics frame for an entity.
    *
-   * @param {Array<{x:number,y:number,z:number}>} bloques bloques solidos cercanos (centros).
-   * @param {THREE.Object3D & {puedeSaltar?: boolean, altura?: number}} personaje
-   * @param {THREE.Object3D} boundingBox AABB visual del personaje.
-   * @param {Object<string, boolean>} teclasPulsadas mapa estado teclado.
-   * @param {THREE.Vector3} vectorDir direccion XZ de movimiento (sin normalizar).
-   * @param {number} velocidad magnitud del paso horizontal este frame.
+   * @param {Array<{x:number,y:number,z:number}>} blocks nearby solid blocks (centers).
+   * @param {THREE.Object3D & {canJump?: boolean, height?: number}} entity
+   * @param {THREE.Object3D} boundingBox visual AABB of the entity.
+   * @param {Object<string, boolean>} keysPressed keyboard state map.
+   * @param {THREE.Vector3} moveDir XZ movement direction (unnormalized).
+   * @param {number} speed horizontal step magnitude this frame.
    */
-  update(bloques, personaje, boundingBox, teclasPulsadas, vectorDir, velocidad) {
+  update(blocks, entity, boundingBox, keysPressed, moveDir, speed) {
     const delta = this.clock.getDelta();
 
-    if (personaje.puedeSaltar && teclasPulsadas != null && teclasPulsadas[' ']) {
-      this.caidaVel = 10;
-      personaje.puedeSaltar = false;
+    if (entity.canJump && keysPressed != null && keysPressed[' ']) {
+      this.fallVel = 10;
+      entity.canJump = false;
     }
 
-    // Construye delta de movimiento de este frame:
-    //   XZ desde el input (vectorDir * velocidad)
-    //   Y desde la gravedad (caidaVel * delta_t)
-    const velocidadFinal = teclasPulsadas && teclasPulsadas['SHIFT'] ? velocidad * 2 : velocidad;
-    const dir = vectorDir.clone().normalize();
+    const finalSpeed = keysPressed && keysPressed['SHIFT'] ? speed * 2 : speed;
+    const dir = moveDir.clone().normalize();
     const moveDelta = {
-      x: dir.x * velocidadFinal,
-      y: this.caidaVel * delta,
-      z: dir.z * velocidadFinal,
+      x: dir.x * finalSpeed,
+      y: this.fallVel * delta,
+      z: dir.z * finalSpeed,
     };
 
-    // AABB actual del personaje en world space (boundingBox es 0.5 ancho,
-    // 2 alto, 0.5 fondo segun Esteban.js: 8/16 x 32/16 x 8/16).
-    const halfExtents = this._extraerHalfExtents(boundingBox);
+    // entity AABB in world space (boundingBox: 8/16 × 32/16 × 8/16)
+    const halfExtents = this._getHalfExtents(boundingBox);
     const playerAABB = {
       min: {
         x: boundingBox.position.x - halfExtents.x,
@@ -64,33 +59,30 @@ class Colisiones {
       },
     };
 
-    const blockAABBs = blockCentersToAABBs(bloques);
+    const blockAABBs = blockCentersToAABBs(blocks);
     const result = resolveMovement(playerAABB, moveDelta, blockAABBs);
 
-    // Aplica posicion resultante al boundingBox y a personaje.position.
-    // personaje.position.y se calcula manteniendo el offset original:
-    // boundingBox = personaje.position.y + altura/PM/2 (1u para altura=32).
     const newBBox = result.aabb;
     boundingBox.position.x = (newBBox.min.x + newBBox.max.x) / 2;
     boundingBox.position.y = (newBBox.min.y + newBBox.max.y) / 2;
     boundingBox.position.z = (newBBox.min.z + newBBox.max.z) / 2;
 
-    const offsetPersonajeY = personaje.altura ? personaje.altura / PM.PIXELES_ESTANDAR / 2 : 1;
-    personaje.position.x = boundingBox.position.x;
-    personaje.position.y = boundingBox.position.y - offsetPersonajeY;
-    personaje.position.z = boundingBox.position.z;
+    // boundingBox = entity.position.y + height/PM/2 (1u for height=32)
+    const entityYOffset = entity.height ? entity.height / PM.PIXELES_ESTANDAR / 2 : 1;
+    entity.position.x = boundingBox.position.x;
+    entity.position.y = boundingBox.position.y - entityYOffset;
+    entity.position.z = boundingBox.position.z;
 
     if (result.onGround) {
-      this.caidaVel = 0;
-      personaje.puedeSaltar = true;
+      this.fallVel = 0;
+      entity.canJump = true;
     } else {
-      this.caidaVel += this.caidaAcc * delta;
-      if (result.hitCeiling && this.caidaVel > 0) this.caidaVel = 0;
+      this.fallVel += this.fallAcc * delta;
+      if (result.hitCeiling && this.fallVel > 0) this.fallVel = 0;
     }
   }
 
-  _extraerHalfExtents(boundingBox) {
-    // BoxGeometry.parameters guarda width/height/depth originales.
+  _getHalfExtents(boundingBox) {
     const g = boundingBox.geometry;
     if (g.parameters) {
       return {
@@ -99,7 +91,6 @@ class Colisiones {
         z: g.parameters.depth / 2,
       };
     }
-    // Fallback al boundingBox geometrico.
     g.computeBoundingBox();
     const bb = g.boundingBox;
     return {
@@ -110,4 +101,5 @@ class Colisiones {
   }
 }
 
-export { Colisiones };
+export { Collisions };
+export { Collisions as Colisiones };

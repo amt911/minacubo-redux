@@ -1,28 +1,28 @@
 // @ts-check
 import { describe, it, expect } from 'vitest';
-import { generarArbolRoble, ArbolRoble } from './estructuras.js';
+import { generateOakTree, OakTree } from './estructuras.js';
 import { PIXELES_ESTANDAR } from './ParametrosMundo.js';
 
 const Y_BASE = 8 / PIXELES_ESTANDAR;
 
-describe('generarArbolRoble', () => {
-  it('tronco tiene exactamente `altura` bloques', () => {
-    const tree = generarArbolRoble(4);
-    expect(tree.bloquesmadera).toHaveLength(4);
-    expect(generarArbolRoble(7).bloquesmadera).toHaveLength(7);
+describe('generateOakTree', () => {
+  it('trunk has exactly `height` bloques', () => {
+    const tree = generateOakTree(4);
+    expect(tree.woodBlocks).toHaveLength(4);
+    expect(generateOakTree(7).woodBlocks).toHaveLength(7);
   });
 
-  it('tronco siempre en x=0, z=0', () => {
-    const tree = generarArbolRoble(5);
-    for (const block of tree.bloquesmadera) {
+  it('trunk always at x=0, z=0', () => {
+    const tree = generateOakTree(5);
+    for (const block of tree.woodBlocks) {
       expect(block.x).toBe(0);
       expect(block.z).toBe(0);
     }
   });
 
-  it('tronco apilado verticalmente desde yBase', () => {
-    const tree = generarArbolRoble(4);
-    expect(tree.bloquesmadera.map((b) => b.y)).toEqual([
+  it('trunk stacked vertically from yBase', () => {
+    const tree = generateOakTree(4);
+    expect(tree.woodBlocks.map((b) => b.y)).toEqual([
       Y_BASE,
       Y_BASE + 1,
       Y_BASE + 2,
@@ -30,15 +30,15 @@ describe('generarArbolRoble', () => {
     ]);
   });
 
-  it('corona tiene 8*altura - 7 hojas (formula derivada)', () => {
-    expect(generarArbolRoble(4).bloqueshojas).toHaveLength(8 * 4 - 7);
-    expect(generarArbolRoble(5).bloqueshojas).toHaveLength(8 * 5 - 7);
-    expect(generarArbolRoble(6).bloqueshojas).toHaveLength(8 * 6 - 7);
+  it('corona tiene 8*height - 7 hojas (formula derivada)', () => {
+    expect(generateOakTree(4).leaves).toHaveLength(8 * 4 - 7);
+    expect(generateOakTree(5).leaves).toHaveLength(8 * 5 - 7);
+    expect(generateOakTree(6).leaves).toHaveLength(8 * 6 - 7);
   });
 
-  it('corona es radio 1 en x y z (rango [-1, 1])', () => {
-    const tree = generarArbolRoble(4);
-    for (const block of tree.bloqueshojas) {
+  it('canopy is radius 1 in x and z (range [-1, 1])', () => {
+    const tree = generateOakTree(4);
+    for (const block of tree.leaves) {
       expect(block.x).toBeGreaterThanOrEqual(-1);
       expect(block.x).toBeLessThanOrEqual(1);
       expect(block.z).toBeGreaterThanOrEqual(-1);
@@ -46,41 +46,41 @@ describe('generarArbolRoble', () => {
     }
   });
 
-  it('hojas debajo del tope (k < altura) saltan columna central (x=0,z=0)', () => {
-    const tree = generarArbolRoble(4);
-    const yTope = Y_BASE + tree.altura;
-    const debajo = tree.bloqueshojas.filter((b) => b.y < yTope);
-    expect(debajo.some((b) => b.x === 0 && b.z === 0)).toBe(false);
+  it('hojas below del tope (k < height) saltan columna central (x=0,z=0)', () => {
+    const tree = generateOakTree(4);
+    const yTop = Y_BASE + tree.height;
+    const below = tree.leaves.filter((b) => b.y < yTop);
+    expect(below.some((b) => b.x === 0 && b.z === 0)).toBe(false);
   });
 
-  it('hojas en el tope (k = altura) incluyen columna central', () => {
-    const tree = generarArbolRoble(4);
-    const yTope = Y_BASE + tree.altura;
-    const enTope = tree.bloqueshojas.filter((b) => b.y === yTope);
-    expect(enTope.some((b) => b.x === 0 && b.z === 0)).toBe(true);
-    expect(enTope).toHaveLength(9);
+  it('hojas en el tope (k = height) incluyen columna central', () => {
+    const tree = generateOakTree(4);
+    const yTop = Y_BASE + tree.height;
+    const atTop = tree.leaves.filter((b) => b.y === yTop);
+    expect(atTop.some((b) => b.x === 0 && b.z === 0)).toBe(true);
+    expect(atTop).toHaveLength(9);
   });
 
-  it('devuelve la altura usada', () => {
-    expect(generarArbolRoble(4).altura).toBe(4);
-    expect(generarArbolRoble(9).altura).toBe(9);
+  it('devuelve la height usada', () => {
+    expect(generateOakTree(4).height).toBe(4);
+    expect(generateOakTree(9).height).toBe(9);
   });
 
-  it('altura por defecto cae en rango 4-5 (random)', () => {
+  it('height por defecto cae en rango 4-5 (random)', () => {
     for (let i = 0; i < 20; i++) {
-      const { altura } = generarArbolRoble();
-      expect(altura).toBeGreaterThanOrEqual(4);
-      expect(altura).toBeLessThanOrEqual(5);
+      const { height } = generateOakTree();
+      expect(height).toBeGreaterThanOrEqual(4);
+      expect(height).toBeLessThanOrEqual(5);
     }
   });
 });
 
-describe('ArbolRoble (clase wrapper)', () => {
-  it('expone bloquesmadera y bloqueshojas con shape correcto', () => {
-    const arbol = new ArbolRoble();
-    expect(Array.isArray(arbol.bloquesmadera)).toBe(true);
-    expect(Array.isArray(arbol.bloqueshojas)).toBe(true);
-    expect(arbol.bloquesmadera.length).toBeGreaterThanOrEqual(4);
-    expect(arbol.bloquesmadera.length).toBeLessThanOrEqual(5);
+describe('OakTree (wrapper class)', () => {
+  it('exposes woodBlocks y leaves with correct shape', () => {
+    const tree = new OakTree();
+    expect(Array.isArray(tree.woodBlocks)).toBe(true);
+    expect(Array.isArray(tree.leaves)).toBe(true);
+    expect(tree.woodBlocks.length).toBeGreaterThanOrEqual(4);
+    expect(tree.woodBlocks.length).toBeLessThanOrEqual(5);
   });
 });

@@ -16,7 +16,7 @@
  * @param {number} tamChunk
  * @returns {Coord2}
  */
-export function identificarChunk(x, z, tamChunk) {
+export function identifyChunk(x, z, tamChunk) {
   return {
     x: Math.round((x - (x % tamChunk)) / tamChunk),
     z: Math.round((z - (z % tamChunk)) / tamChunk),

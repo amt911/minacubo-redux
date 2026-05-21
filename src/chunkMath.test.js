@@ -1,36 +1,36 @@
 // @ts-check
 import { describe, it, expect } from 'vitest';
-import { identificarChunk, chunkToWorld, shiftMinMaxIfNeeded } from './chunkMath.js';
+import { identifyChunk, chunkToWorld, shiftMinMaxIfNeeded } from './chunkMath.js';
 
-describe('identificarChunk', () => {
+describe('identifyChunk', () => {
   it('coords positivas mapean a chunk correcto', () => {
-    expect(identificarChunk(0, 0, 12)).toEqual({ x: 0, z: 0 });
-    expect(identificarChunk(5, 7, 12)).toEqual({ x: 0, z: 0 });
-    expect(identificarChunk(11, 11, 12)).toEqual({ x: 0, z: 0 });
-    expect(identificarChunk(12, 12, 12)).toEqual({ x: 1, z: 1 });
-    expect(identificarChunk(23, 24, 12)).toEqual({ x: 1, z: 2 });
+    expect(identifyChunk(0, 0, 12)).toEqual({ x: 0, z: 0 });
+    expect(identifyChunk(5, 7, 12)).toEqual({ x: 0, z: 0 });
+    expect(identifyChunk(11, 11, 12)).toEqual({ x: 0, z: 0 });
+    expect(identifyChunk(12, 12, 12)).toEqual({ x: 1, z: 1 });
+    expect(identifyChunk(23, 24, 12)).toEqual({ x: 1, z: 2 });
   });
 
   it('multiplos exactos del tamano caen en el chunk superior', () => {
-    expect(identificarChunk(24, 36, 12)).toEqual({ x: 2, z: 3 });
+    expect(identifyChunk(24, 36, 12)).toEqual({ x: 2, z: 3 });
   });
 
   it('coords negativas truncan hacia cero (no Math.floor)', () => {
-    expect(identificarChunk(-1, -1, 12)).toEqual({ x: 0, z: 0 });
-    expect(identificarChunk(-12, -12, 12)).toEqual({ x: -1, z: -1 });
-    expect(identificarChunk(-13, -13, 12)).toEqual({ x: -1, z: -1 });
-    expect(identificarChunk(-24, -25, 12)).toEqual({ x: -2, z: -2 });
+    expect(identifyChunk(-1, -1, 12)).toEqual({ x: 0, z: 0 });
+    expect(identifyChunk(-12, -12, 12)).toEqual({ x: -1, z: -1 });
+    expect(identifyChunk(-13, -13, 12)).toEqual({ x: -1, z: -1 });
+    expect(identifyChunk(-24, -25, 12)).toEqual({ x: -2, z: -2 });
   });
 
   it('coords float caen en el chunk correcto', () => {
-    expect(identificarChunk(0.5, 11.999, 12)).toEqual({ x: 0, z: 0 });
-    expect(identificarChunk(12.5, 12.5, 12)).toEqual({ x: 1, z: 1 });
-    expect(identificarChunk(-0.5, -0.5, 12)).toEqual({ x: 0, z: 0 });
+    expect(identifyChunk(0.5, 11.999, 12)).toEqual({ x: 0, z: 0 });
+    expect(identifyChunk(12.5, 12.5, 12)).toEqual({ x: 1, z: 1 });
+    expect(identifyChunk(-0.5, -0.5, 12)).toEqual({ x: 0, z: 0 });
   });
 
   it('tam_chunk = 1 → cada unidad es un chunk', () => {
-    expect(identificarChunk(0, 0, 1)).toEqual({ x: 0, z: 0 });
-    expect(identificarChunk(5, 3, 1)).toEqual({ x: 5, z: 3 });
+    expect(identifyChunk(0, 0, 1)).toEqual({ x: 0, z: 0 });
+    expect(identifyChunk(5, 3, 1)).toEqual({ x: 5, z: 3 });
   });
 });
 

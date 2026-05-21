@@ -8,65 +8,39 @@ import Stats from 'three/addons/libs/stats.module.js'
 // Clases de mi proyecto
 
 import { DayNightCycle } from './DayNightCycle.js'
-import { Esteban } from './Esteban.js'
+import { Player } from './Esteban.js'
 import { Zombie } from './Zombie.js'
-import { Cerdo } from './Cerdo.js'
+import { Pig } from './Cerdo.js'
+import { RaycastInteraction } from './RaycastInteraction.js'
+import { InputHandler } from './InputHandler.js'
+import { ChunkManager } from './ChunkManager.js'
+import { NPCManager } from './NPCManager.js'
 
-import * as cubos from './Cubo.js'
-import * as estructuras from './estructuras.js'
-
+import { BLOCK_TYPES, blockMaterials, blockGeometries } from './BlockRegistry.js'
 import * as PM from './ParametrosMundo.js'
-import { identificarChunk } from './chunkMath.js'
-import { createTerrainNoise, terrainHeight } from './noise.js'
+import { identifyChunk } from './chunkMath.js'
+import { createTerrainNoise } from './noise.js'
 
 /// La clase fachada del modelo
 /**
  * Usaremos una clase derivada de la clase Scene de Three.js para llelet el control de la escena y de todo lo que ocurre en ella.
  */
 
-function estaColindando(posx, posz, lista){
-//detecta si posx, posy esta colindando con alguno de los elementos de la lista
-  for(let i = 0; i < lista.length; i++){
-    if(Math.abs(posx - lista[i].x) <= 2 && Math.abs(posz - lista[i].z) <= 2){
-      return true;
-    }
-  }  
-  return false;
-}
 
-function estaEnArbol(posx, posz, lista){
-  //detecta si posx, posy esta colindando con alguno de los elementos de la lista
-    for(let i = 0; i < lista.length; i++){
-      if(posx === lista[i].x && posz === lista[i].z){
-        return true;
-      }
-    }  
-    return false;
-  }
 class MyScene extends THREE.Scene {
   constructor(myCanvas) {
     super();
 
     this.clock=new THREE.Clock();
 
-    this.tiempoCerdo = 200;
 
-    //this.fog= new THREE.Fog(0xffffff, 0.1, 100);
     this.movt = "parado";
-    this.mapTeclas = {
-      "W": false,
-      "A": false,
-      "D": false,
-      "S": false,
-      " ": false,
-      "SHIFT": false
-    };
 
     this.myCanvasName = myCanvas;
-    // Lo primero, crear el visualizador, pasándole el lienzo sobre el que realizar los renderizados.
+    // Create renderer, attach to canvas.
     this.renderer = this.createRenderer(myCanvas);
 
-    // Se añade a la gui los controles para manipular los elementos de esta clase
+    // Add GUI controls for this class.
     this.gui = this.createGUI();
 
     this.initStats();
@@ -80,267 +54,155 @@ class MyScene extends THREE.Scene {
 
     // Construimos los distinos elementos que tendremos en la escena
 
-    // Todo elemento que se desee sea tenido en cuenta en el renderizado de la escena debe pertenecer a esta. Bien como hijo de la escena (this en esta clase) o como hijo de un elemento que ya esté en la escena.
-    // Tras crear cada elemento se añadirá a la escena con   this.add(letiable)
+
+
     this.createLights();
 
 
-    // Y unos ejes. Imprescindibles para orientarnos sobre dónde están las cosas
+    // Debug axes.
     this.axis = new THREE.AxesHelper(55);
     this.add(this.axis);
-    this.poscerdo = 0;
 
-    // Por último creamos el modelo.
-    // El modelo puede incluir su parte de la interfaz gráfica de usuario. Le pasamos la referencia a
-    // la gui y el texto bajo el que se agruparán los controles de la interfaz que añada el modelo.
-    this.model = new Esteban(this.gui, "Esteban");
+
+
+
+    this.model = new Player(this.gui, "Player");
     this.createCamera();
     this.setupPointerLock();
 
-    this.habilitarSombrasEnSubarbol(this.model);
+    this.enableShadowsOnSubtree(this.model);
     this.add(this.model);
 
     this.zombie = new Zombie(this.gui, "Zombie");
-    this.habilitarSombrasEnSubarbol(this.zombie);
+    this.enableShadowsOnSubtree(this.zombie);
 
     this.zombie.position.y+=10;
     this.zombie.boundingBox.position.y+=10;
 
-    this.chunkCollision = [];   //Almacena chunks
-    this.chunk = [];
-    const matrix = new THREE.Matrix4();
-    this.noise = createTerrainNoise();
-
-    //this.puntoscerdos = [[]];
-    this.puntoscerdos = [];
-
-    this.model.position.x = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2
-    this.model.position.z = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2
+    this.model.position.x = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2;
+    this.model.position.z = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2;
     this.model.boundingBox.position.x = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2;
     this.model.boundingBox.position.z = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2;
     this.model.boundingBox.position.y = this.model.position.y + 16 / PM.PIXELES_ESTANDAR;
-    this.objeto = 0;
-    this.bloqueSeleccionado = [
-      "Hierba",
-      "Tierra",
-      "Roca",
-      "Piedra",
-      "MaderaRoble",
-      "PiedraBase",
-      "Cristal",
-      "PiedraLuminosa",
-      "HojasRoble"];
+    this.blockTypes = BLOCK_TYPES;
 
-    // Build per-type geometry + material maps so each InstancedMesh uses
-    // the geometry that matches its consolidated groups.
-    const _bloqueInstancias = {
-      "Hierba":        new cubos.Hierba(),
-      "Tierra":        new cubos.Tierra(),
-      "Roca":          new cubos.Roca(),
-      "Piedra":        new cubos.Piedra(),
-      "MaderaRoble":   new cubos.MaderaRoble(),
-      "PiedraBase":    new cubos.PiedraBase(),
-      "Cristal":       new cubos.Cristal(),
-      "PiedraLuminosa":new cubos.PiedraLuminosa(),
-      "HojasRoble":    new cubos.HojaRoble(),
-    };
-    this.materialesText = {};
-    this.geometriaText = {};
-    for (const [tipo, inst] of Object.entries(_bloqueInstancias)) {
-      this.materialesText[tipo] = inst.material;
-      this.geometriaText[tipo]  = inst.geometria;
-    }
+    this.blockMaterials = blockMaterials;
+    this.blockGeometries  = blockGeometries;
 
+    const TC = this.TAM_CHUNK;
+    const DR = this.DISTANCIA_RENDER;
     this.sizeIMesh = {
-      "Hierba": 5 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER,
-      "Tierra": 5 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER,
-      "Roca": 0,
-      "Piedra": 5 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER,
-      "MaderaRoble": 1 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER,
-      "PiedraBase": 1 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER,
-      "Cristal": 1,
-      "PiedraLuminosa": 1,
-      "HojasRoble": 1 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER
-    }
+      Grass:         5 * TC * TC * DR * DR,
+      Dirt:         5 * TC * TC * DR * DR,
+      Rock:           0,
+      Stone:         5 * TC * TC * DR * DR,
+      OakWood:    1 * TC * TC * DR * DR,
+      BaseStone:     1 * TC * TC * DR * DR,
+      Glass:        1,
+      GlowStone: 1,
+      OakLeaves:     1 * TC * TC * DR * DR,
+    };
 
     this.mesh = {};
-    for (const tipo of this.bloqueSeleccionado) {
+    for (const tipo of this.blockTypes) {
       this.mesh[tipo] = new THREE.InstancedMesh(
-        this.geometriaText[tipo],
-        this.materialesText[tipo],
+        this.blockGeometries[tipo],
+        this.blockMaterials[tipo],
         this.sizeIMesh[tipo]
       );
     }
 
-    let k = 0;
+    const noise = createTerrainNoise();
+    this.chunkManager = new ChunkManager({
+      TAM_CHUNK:        this.TAM_CHUNK,
+      DISTANCIA_RENDER: this.DISTANCIA_RENDER,
+      noise,
+      mesh:             this.mesh,
+      blockGeometries:    this.blockGeometries,
+      blockMaterials:   this.blockMaterials,
+      sizeIMesh:        this.sizeIMesh,
+      scene:            this,
+    });
 
-    let contador = 0;
-    let contador2 = 0;
-    let contador3 = 0;
-    let contador4 = 0;
-    let zombiex = 0;
-    let zombiey = 0;
-    let zombiez = 0;  
-    for (let i = 0; i < this.DISTANCIA_RENDER; i++) {   //PLANO XZ DE CHUNKS
-      for (let j = 0; j < this.DISTANCIA_RENDER; j++) {
-        const bloques = [];
-        var n_arboles = Math.floor(Math.random() * this.TAM_CHUNK/5)+1;
-        var n_puntoscerdo = Math.floor(Math.random() * this.TAM_CHUNK/4)+2;
-        var list_arboles = [];
+    const { zombieSpawn, pigWaypoints } = this.chunkManager.init();
 
-        for (let m = 0; m < n_arboles; m++) {
-          let posx =  Math.floor(Math.random()* this.TAM_CHUNK);
-          let posz = Math.floor(Math.random() * this.TAM_CHUNK);
-          while(estaColindando(posx,posz,list_arboles)){
-           posx =  Math.floor(Math.random()* this.TAM_CHUNK);
-           posz = Math.floor(Math.random() * this.TAM_CHUNK);
-          }
-          list_arboles.push({ x: posx, y: 10, z: posz });
-        }
+    // Expose chunk data via proxy so existing code keeps working
+    this.chunk       = this.chunkManager.chunk;
+    this.chunkMinMax = this.chunkManager.chunkMinMax;
 
-        if(i === 0 && j === 0){
-          zombiex = Math.floor(Math.random() * this.TAM_CHUNK);
-          zombiez = Math.floor(Math.random()* this.TAM_CHUNK);
-          //Añadir n coordenadas x,y,z random a puntoscerdos
-          for(let m = 0; m < n_puntoscerdo; m++){
-            let posx =  Math.floor(Math.random()* this.TAM_CHUNK);
-            let posz = Math.floor(Math.random() * this.TAM_CHUNK);
-            while(estaEnArbol(posx,posz,list_arboles)){
-             posx =  Math.floor(Math.random()* this.TAM_CHUNK);
-             posz = Math.floor(Math.random() * this.TAM_CHUNK);
-            }
-            this.puntoscerdos.push({ x: posx, y: 10, z: posz });
-          }        
-  
-        }
-
-
-        for (let x = i * this.TAM_CHUNK; x < (i * this.TAM_CHUNK) + this.TAM_CHUNK; x++) {   //PARA GENERAR LOS BLOQUES DE UN CHUNK
-          for (let z = j * this.TAM_CHUNK; z < (j * this.TAM_CHUNK) + this.TAM_CHUNK; z++) {
-            const v = terrainHeight(this.noise, x, z);
-            if(i === 0 && j === 0){
-              if(zombiex + i*this.TAM_CHUNK === x && zombiez + j*this.TAM_CHUNK === z){
-                zombiey = v;
-              }
-              }
-            matrix.setPosition(x * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR, z * 16 / PM.PIXELES_ESTANDAR);
-            this.mesh["Hierba"].setMatrixAt(k, matrix);
-
-
-            bloques.push({ x: x * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR, z: z * 16 / PM.PIXELES_ESTANDAR, material: "Hierba" });
-            k++;
-            for (let indice_arbol = 0; indice_arbol < list_arboles.length; indice_arbol++) {
-              if (list_arboles[indice_arbol].x + i * this.TAM_CHUNK === x && list_arboles[indice_arbol].z + j * this.TAM_CHUNK === z) {
-                list_arboles[indice_arbol].y = v + 0.5;
-                list_arboles[indice_arbol].x = list_arboles[indice_arbol].x + i * this.TAM_CHUNK;
-                list_arboles[indice_arbol].z = list_arboles[indice_arbol].z + j * this.TAM_CHUNK;
-              }
-            }
-            //si algun punto de puntoscerdo coincide con x y z, entonces asigno v a y
-            for (let indice_puntoscerdo = 0; indice_puntoscerdo < this.puntoscerdos.length; indice_puntoscerdo++) {
-              if (this.puntoscerdos[indice_puntoscerdo].x + i * this.TAM_CHUNK === x && this.puntoscerdos[indice_puntoscerdo].z + j * this.TAM_CHUNK === z) {
-                this.puntoscerdos[indice_puntoscerdo].y = v;
-                this.puntoscerdos[indice_puntoscerdo].x = this.puntoscerdos[indice_puntoscerdo].x + i * this.TAM_CHUNK;
-                this.puntoscerdos[indice_puntoscerdo].z = this.puntoscerdos[indice_puntoscerdo].z + j * this.TAM_CHUNK;
-              }
-            }
-
-            for (let s = 0; s < 3; s++) {
-              matrix.setPosition(x * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR - s - 1, z * 16 / PM.PIXELES_ESTANDAR);
-              this.mesh["Tierra"].setMatrixAt(contador, matrix);
-
-
-              bloques.push({ x: x * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR - s - 1, z: z * 16 / PM.PIXELES_ESTANDAR, material: "Tierra" });
-              contador++;
-            }
-            /* */
-            for (let r = 3; r < 8; r++) {
-              matrix.setPosition(x * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR - r - 1, z * 16 / PM.PIXELES_ESTANDAR);
-              this.mesh["Piedra"].setMatrixAt(contador2, matrix);
-
-
-              bloques.push({ x: x * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR - r - 1, z: z * 16 / PM.PIXELES_ESTANDAR, material: "Piedra" });
-              contador2++;
-            }
-          }
-        }
-        for (let indice_arbol = 0; indice_arbol < list_arboles.length; indice_arbol++) {
-          const arbol = new estructuras.ArbolRoble();
-
-          for (let r = 0; r < arbol.bloqueshojas.length; r++) {
-            matrix.setPosition(list_arboles[indice_arbol].x + arbol.bloqueshojas[r].x, list_arboles[indice_arbol].y + arbol.bloqueshojas[r].y - 0.5, list_arboles[indice_arbol].z + arbol.bloqueshojas[r].z);
-            this.mesh["HojasRoble"].setMatrixAt(contador3, matrix);
-            bloques.push({ x: list_arboles[indice_arbol].x + arbol.bloqueshojas[r].x, y: list_arboles[indice_arbol].y + arbol.bloqueshojas[r].y -0.5, z: list_arboles[indice_arbol].z  + arbol.bloqueshojas[r].z, material: "HojasRoble" });
-            contador3++;
-          }
-
-          for (let r = 0; r < arbol.bloquesmadera.length; r++) {
-            matrix.setPosition(list_arboles[indice_arbol].x + arbol.bloquesmadera[r].x, list_arboles[indice_arbol].y + arbol.bloquesmadera[r].y -0.5, list_arboles[indice_arbol].z + arbol.bloquesmadera[r].z);
-            this.mesh["MaderaRoble"].setMatrixAt(contador4, matrix);
-            bloques.push({ x: list_arboles[indice_arbol].x + arbol.bloquesmadera[r].x, y: list_arboles[indice_arbol].y + arbol.bloquesmadera[r].y -0.5, z: list_arboles[indice_arbol].z + arbol.bloquesmadera[r].z, material: "MaderaRoble" });
-            contador4++;
-          }
-        }
-        this.chunkCollision.push(bloques);
-        const chunkIndex = this.identificarChunk(bloques[0].x, bloques[0].z);
-
-        if (this.chunk[chunkIndex.x] === undefined)
-          this.chunk[chunkIndex.x] = [];
-
-        this.chunk[chunkIndex.x][chunkIndex.z] = bloques;
-      }
-    }
-
-    this.mesh["Hierba"].count = k;
-    this.mesh["Tierra"].count = contador;
-    this.mesh["Piedra"].count = contador2;
-    this.mesh["HojasRoble"].count = contador3;
-    this.mesh["MaderaRoble"].count = contador4;
-
-    for (const aux in this.mesh) {
-      this.aplicarSombrasInstancedMesh(this.mesh[aux]);
-      this.add(this.mesh[aux]);
-    }
-
-    this.chunkMinMax = {
-      min: { x: 0, z: 0 },
-      max: { x: this.DISTANCIA_RENDER - 1, z: this.DISTANCIA_RENDER - 1 }
-    };
-
-    this.zombie.position.set(this.zombie.position.x+zombiex, this.zombie.position.y+zombiey+0.1, this.zombie.position.z+zombiez);
-    this.zombie.boundingBox.position.set(this.zombie.boundingBox.position.x+zombiex, this.zombie.boundingBox.position.y+zombiey+0.1, this.zombie.boundingBox.position.z+zombiez);    
+    this.zombie.position.set(
+      this.zombie.position.x + zombieSpawn.x,
+      this.zombie.position.y + zombieSpawn.y + 0.1,
+      this.zombie.position.z + zombieSpawn.z
+    );
+    this.zombie.boundingBox.position.set(
+      this.zombie.boundingBox.position.x + zombieSpawn.x,
+      this.zombie.boundingBox.position.y + zombieSpawn.y + 0.1,
+      this.zombie.boundingBox.position.z + zombieSpawn.z
+    );
     this.add(this.zombie);
 
-
-    //Creacion del cerdo
-    this.cerdo = new Cerdo(this.gui, "Cerdo");
-    this.habilitarSombrasEnSubarbol(this.cerdo);
-    this.cerdo.position.set(this.cerdo.position.x+this.puntoscerdos[0].x, this.cerdo.position.y + this.puntoscerdos[0].y+0.1, this.cerdo.position.z + this.puntoscerdos[0].z);
-    this.cerdo.boundingBox.position.set(this.cerdo.boundingBox.position.x+this.puntoscerdos[0].x,this.cerdo.boundingBox.position.y+ this.puntoscerdos[0].y+0.1, this.cerdo.boundingBox.position.z + this.puntoscerdos[0].z);
-    this.add(this.cerdo);
-
-    //Creacion del feedback
-    const cajaSeleccionada = new THREE.BoxGeometry(1, 1, 1);
-    this.cajaSeleccionada = new THREE.Mesh(cajaSeleccionada);
-
-    this.add(this.cajaSeleccionada);
-
-    const cajaMat = /** @type {THREE.MeshBasicMaterial} */ (this.cajaSeleccionada.material);
-    cajaMat.wireframe = true;
-    cajaMat.wireframeLinewidth = 3;
-    cajaMat.color.set(0x333333);
-    this.cajaSeleccionada.visible = false;
+    this.pig = new Pig(this.gui, "Cerdo");
+    this.enableShadowsOnSubtree(this.pig);
+    const pig0 = pigWaypoints[0];
+    this.pig.position.set(
+      this.pig.position.x + pig0.x,
+      this.pig.position.y + pig0.y + 0.1,
+      this.pig.position.z + pig0.z
+    );
+    this.pig.boundingBox.position.set(
+      this.pig.boundingBox.position.x + pig0.x,
+      this.pig.boundingBox.position.y + pig0.y + 0.1,
+      this.pig.boundingBox.position.z + pig0.z
+    );
+    this.add(this.pig);
 
     //Creacion del fog, el cielo y su animacion
     this.fog= new THREE.Fog(0x87CEEB, this.TAM_CHUNK*(this.DISTANCIA_RENDER/2)-4, this.TAM_CHUNK*(this.DISTANCIA_RENDER/2));
     this.background= new THREE.Color(0x87CEEB);
 
     this.dayNightCycle = new DayNightCycle(this, this.fog, this.spotLight, this.sunLight);
+
+    this.raycast = new RaycastInteraction({
+      camera:          this.camera,
+      mesh:            this.mesh,
+      blockGeometries:   this.blockGeometries,
+      blockMaterials:  this.blockMaterials,
+      sizeIMesh:       this.sizeIMesh,
+      chunk:           this.chunk,
+      chunkMinMax:     this.chunkMinMax,
+      blockTypes: this.blockTypes,
+      getObjeto:       () => this.objeto,
+      scene:           this,
+      TAM_CHUNK:       this.TAM_CHUNK,
+    });
+
+    this.input = new InputHandler({
+      onPlayerReset: () => this.model.resetPosicion(),
+      onMouseDown:   (e) => this.onDocumentMouseDown(e),
+      onMouseUp:     (e) => this.onDocumentMouseUp(e),
+    });
+    // Expose keyMap alias for update() callers
+    Object.defineProperty(this, 'mapTeclas', { get: () => this.input.keyMap });
+    Object.defineProperty(this, 'objeto', {
+      get: () => this.input.selectedBlockIndex,
+      set: (v) => { this.input.selectedBlockIndex = v; },
+    });
+
+    this.npcManager = new NPCManager({
+      zombie:           this.zombie,
+      pig:            this.pig,
+      pigWaypoints:     pigWaypoints,
+      chunkManager:     this.chunkManager,
+      getPlayerPosition: () => this.model.position,
+      TAM_CHUNK:        this.TAM_CHUNK,
+      DISTANCIA_RENDER: this.DISTANCIA_RENDER,
+    });
   }
 
   /** @returns {{x: number, z: number}} */
-  identificarChunk(x, z) {
-    return identificarChunk(x, z, this.TAM_CHUNK);
+  identifyChunk(x, z) {
+    return identifyChunk(x, z, this.TAM_CHUNK);
   }
 
 
@@ -432,7 +294,7 @@ class MyScene extends THREE.Scene {
     folder.add(this.guiControls, 'activarWireframe')
       .name('Mostrar feedback (raycast a 10Hz)');
 
-    const graficos = gui.addFolder('Gráficos');
+    const graficos = gui.addFolder('Graphics');
 
     graficos.add(this.guiControls, 'shadowsEnabled')
       .name('Sombras')
@@ -447,7 +309,7 @@ class MyScene extends THREE.Scene {
       });
 
     graficos.add(this.guiControls, 'shadowResolution', { '512': 512, '1024': 1024, '2048': 2048 })
-      .name('Resolución sombras')
+      .name('Shadow resolution')
       .onChange((v) => {
         this.sunLight.shadow.mapSize.set(v, v);
         if (this.sunLight.shadow.map) {
@@ -457,7 +319,7 @@ class MyScene extends THREE.Scene {
       });
 
     graficos.add(this.guiControls, 'cameraSensitivity', 0.1, 3.0, 0.05)
-      .name('Sensibilidad cámara');
+      .name('Camera sensitivity');
 
     return gui;
   }
@@ -549,7 +411,7 @@ class MyScene extends THREE.Scene {
   // Recorre un Object3D arbitrario y activa cast + receive shadow en
   // cada Mesh hijo. Necesario para personajes/NPCs construidos como grupos
   // con cabeza/torso/extremidades separadas.
-  habilitarSombrasEnSubarbol(obj) {
+  enableShadowsOnSubtree(obj) {
     obj.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = true;
@@ -561,7 +423,7 @@ class MyScene extends THREE.Scene {
   // Configura un InstancedMesh para que proyecte y reciba sombras.
   // frustumCulled=false porque InstancedMesh no recalcula boundingSphere
   // al cambiar matrices: sin esto el shadow pass podria descartar el mesh.
-  aplicarSombrasInstancedMesh(mesh) {
+  applyMeshShadows(mesh) {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
@@ -577,42 +439,6 @@ class MyScene extends THREE.Scene {
     this.sunLight.position.set(p.x + o.x, p.y + o.y, p.z + o.z);
     this.sunLight.target.position.set(p.x, p.y, p.z);
     this.sunLight.target.updateMatrixWorld();
-  }
-
-  /**
-   * Compute block grid position from a raycast hit using face normal.
-   * Replaces the old materialIndex switch — works regardless of how groups
-   * are consolidated in the geometry.
-   *
-   * forRemoval=true  → center of the block that was hit (for removal / highlight).
-   * forRemoval=false → center of the adjacent block (for placement).
-   *
-   * Block centers: integer x,z and half-integer y (e.g. y=4.5).
-   */
-  _blockCenterFromHit(hit, forRemoval) {
-    const p = hit.point;
-    const n = hit.face.normal; // local = world: our blocks have no rotation
-    const sign = forRemoval ? -1 : 1;
-
-    if (Math.abs(n.x) > 0.5) {
-      return {
-        x: p.x + n.x * 0.5 * sign,
-        y: Math.floor(p.y) + 0.5,
-        z: Math.round(p.z),
-      };
-    } else if (Math.abs(n.y) > 0.5) {
-      return {
-        x: Math.round(p.x),
-        y: p.y + n.y * 0.5 * sign,
-        z: Math.round(p.z),
-      };
-    } else {
-      return {
-        x: Math.round(p.x),
-        y: Math.floor(p.y) + 0.5,
-        z: p.z + n.z * 0.5 * sign,
-      };
-    }
   }
 
   setLightIntensity(valor) {
@@ -636,176 +462,47 @@ class MyScene extends THREE.Scene {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
 
-    // Se establece un color de fondo en las imágenes que genera el render
+
     renderer.setClearColor(new THREE.Color(0xEEEEEE), 1.0);
 
-    // Se establece el tamaño, se aprovecha la totalidad de la ventana del navegador
+
     renderer.setSize(window.innerWidth, window.innerHeight);
 
-    // La visualización se muestra en el lienzo recibido
+
     document.querySelector(myCanvas).appendChild(renderer.domElement);
 
     return renderer;
   }
 
   getCamera() {
-    // En principio se devuelve la única cámara que tenemos
-    // Si hubiera letias cámaras, este método decidiría qué cámara devuelve cada vez que es consultado
+
+
     return this.camera;
   }
 
   setCameraAspect(ratio) {
-    // Cada vez que el usuario modifica el tamaño de la ventana desde el gestor de ventanas de
-    // su sistema operativo hay que actualizar el ratio de aspecto de la cámara
+
+
     this.camera.aspect = ratio;
-    // Y si se cambia ese dato hay que actualizar la matriz de proyección de la cámara
+
     this.camera.updateProjectionMatrix();
   }
 
   onWindowResize() {
-    // Este método es llamado cada vez que el usuario modifica el tamapo de la ventana de la aplicación
-    // Hay que actualizar el ratio de aspecto de la cámara
+    // Called on window resize — update camera aspect and renderer size.
+
     this.setCameraAspect(window.innerWidth / window.innerHeight);
 
-    // Y también el tamaño del renderizador
+
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
   onDocumentMouseDown(event) {
-    // Registrar posicion de inicio para distinguir click de arrastrar.
-    // El boton der arrastrado rota la camara (OrbitControls); si apenas
-    // se mueve (<= 5px) se interpreta como click y coloca un bloque en mouseup.
-    if (event.which === 3) {
-      this._rightDragStart = { x: event.clientX, y: event.clientY };
-    }
-
-    else if (event.which === 1) {
-      const mouse = new THREE.Vector2();
-
-      mouse.x = (0.5) * 2 - 1;
-      mouse.y = 1 - 2 * (0.5);
-
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, this.camera);
-
-      const objetosIntersecados = [];
-      for (const tipo in this.mesh) {
-        const objetos = raycaster.intersectObject(this.mesh[tipo], true);
-
-        if (objetos[0] !== undefined && objetos.length > 0 && objetos[0].distance <= 20) {
-          const coord = this._blockCenterFromHit(objetos[0], true);
-          objetosIntersecados.push({ tipo: tipo, coordenada: coord, distancia: objetos[0].distance });
-
-
-
-        }
-
-      }
-
-      //ordena objetos intersecados segun distancia
-      objetosIntersecados.sort(function (a, b) {
-        return a.distancia - b.distancia;
-      });
-
-      if(objetosIntersecados[0] !== undefined){
-        const aux = this.identificarChunk(objetosIntersecados[0].coordenada.x, objetosIntersecados[0].coordenada.z);
-        this.remove(this.mesh[objetosIntersecados[0].tipo]);
-
-        const indice = this.chunk[aux.x][aux.z].findIndex(i => i.x === objetosIntersecados[0].coordenada.x && i.y === objetosIntersecados[0].coordenada.y && i.z === objetosIntersecados[0].coordenada.z);
-
-        if (indice !== -1)
-          this.chunk[aux.x][aux.z].splice(indice, 1);
-
-        const matrix = new THREE.Matrix4();
-
-        let l = 0;
-        this.mesh[objetosIntersecados[0].tipo] = new THREE.InstancedMesh(this.geometriaText[objetosIntersecados[0].tipo], this.materialesText[objetosIntersecados[0].tipo], --this.sizeIMesh[objetosIntersecados[0].tipo]);
-        this.aplicarSombrasInstancedMesh(this.mesh[objetosIntersecados[0].tipo]);
-
-
-        for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
-          for (let i = this.chunkMinMax.min.x; i <= this.chunkMinMax.max.x; i++) {
-            for (let j = 0; j < this.chunk[i][a].length; j++) {
-              if (this.chunk[i][a][j].material === objetosIntersecados[0].tipo) {
-                matrix.setPosition(this.chunk[i][a][j].x, this.chunk[i][a][j].y, this.chunk[i][a][j].z);
-                this.mesh[objetosIntersecados[0].tipo].setMatrixAt(l, matrix);
-                l++;
-              }
-            }
-          }
-        }
-
-        this.add(this.mesh[objetosIntersecados[0].tipo]);
-    }
-    }
-
+    this.raycast.onMouseDown(event);
   }
 
   onDocumentMouseUp(event) {
-    if (event.which !== 3) return;
-    if (!this._rightDragStart) return;
-
-    const dx = event.clientX - this._rightDragStart.x;
-    const dy = event.clientY - this._rightDragStart.y;
-    this._rightDragStart = null;
-
-    // Si el raton se movio mas de 5px fue un drag (rotacion de camara), no un click.
-    if (dx * dx + dy * dy > 25) return;
-
-    // Click derecho: colocar bloque apuntado por el centro de la pantalla.
-    const mouse = new THREE.Vector2();
-    mouse.x = (0.5) * 2 - 1;
-    mouse.y = 1 - 2 * (0.5);
-
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, this.camera);
-
-    const objetosIntersecados = [];
-    for (const tipo in this.mesh) {
-      const objetos = raycaster.intersectObject(this.mesh[tipo], true);
-
-      if (objetos[0] !== undefined && objetos.length > 0 && objetos[0].distance <= 20) {
-        const coord = this._blockCenterFromHit(objetos[0], false);
-        objetosIntersecados.push({ tipo: tipo, coordenada: coord, distancia: objetos[0].distance });
-      }
-    }
-
-    objetosIntersecados.sort(function (a, b) { return a.distancia - b.distancia; });
-
-    if (objetosIntersecados[0] !== undefined) {
-      const aux = this.identificarChunk(objetosIntersecados[0].coordenada.x, objetosIntersecados[0].coordenada.z);
-      this.chunk[aux.x][aux.z].push({
-        material: this.bloqueSeleccionado[this.objeto],
-        x: objetosIntersecados[0].coordenada.x,
-        y: objetosIntersecados[0].coordenada.y,
-        z: objetosIntersecados[0].coordenada.z
-      });
-      this.remove(this.mesh[this.bloqueSeleccionado[this.objeto]]);
-
-      const matrix = new THREE.Matrix4();
-      let l = 0;
-
-      this.mesh[this.bloqueSeleccionado[this.objeto]] = new THREE.InstancedMesh(
-        this.geometriaText[this.bloqueSeleccionado[this.objeto]],
-        this.materialesText[this.bloqueSeleccionado[this.objeto]],
-        ++this.sizeIMesh[this.bloqueSeleccionado[this.objeto]]
-      );
-      this.aplicarSombrasInstancedMesh(this.mesh[this.bloqueSeleccionado[this.objeto]]);
-
-      for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
-        for (let i = this.chunkMinMax.min.x; i <= this.chunkMinMax.max.x; i++) {
-          for (let j = 0; j < this.chunk[i][a].length; j++) {
-            if (this.chunk[i][a][j].material === this.bloqueSeleccionado[this.objeto]) {
-              matrix.setPosition(this.chunk[i][a][j].x, this.chunk[i][a][j].y, this.chunk[i][a][j].z);
-              this.mesh[this.bloqueSeleccionado[this.objeto]].setMatrixAt(l, matrix);
-              l++;
-            }
-          }
-        }
-      }
-
-      this.add(this.mesh[this.bloqueSeleccionado[this.objeto]]);
-    }
+    this.raycast.onMouseUp(event);
   }
 
   _clampCamDist(target, dir, desired) {
@@ -825,44 +522,8 @@ class MyScene extends THREE.Scene {
     return safeDist;
   }
 
-  actualizarFeedback() {
-    // Instancias reutilizadas entre frames — evitamos GC pressure: el
-    // raycast se llama a 10Hz minimo (throttled abajo) pero igualmente
-    // queremos cero allocations en hot path.
-    if (!this._feedbackRaycaster) {
-      this._feedbackRaycaster = new THREE.Raycaster();
-      this._feedbackMouse = new THREE.Vector2(0, 0); // centro de pantalla
-    }
-    const raycaster = this._feedbackRaycaster;
-    raycaster.setFromCamera(this._feedbackMouse, this.camera);
-
-    // Recogemos solo el hit mas cercano global, en vez de acumular todos
-    // y ordenar al final. Iteracion habitual: 9 meshes, antes alocaba
-    // array + sort cada frame.
-    let bestHit = null;
-    let bestCoord = null;
-
-    for (const aux in this.mesh) {
-      const mesh = this.mesh[aux];
-      if (mesh.count === 0) continue; // material sin instancias visibles
-
-      const objetos = raycaster.intersectObject(mesh, false);
-      const hit = objetos[0];
-      if (!hit || hit.distance > 20) continue;
-      if (bestHit && hit.distance >= bestHit.distance) continue;
-
-      bestHit = hit;
-      bestCoord = this._blockCenterFromHit(hit, true);
-    }
-
-    if (bestCoord) {
-      this.cajaSeleccionada.position.set(bestCoord.x, bestCoord.y, bestCoord.z);
-      this.cajaSeleccionada.visible = true;
-    }
-    else {
-      //Pone la caja seleccionada invisible
-      this.cajaSeleccionada.visible = false;
-    }
+  updateFeedback() {
+    this.raycast.updateFeedback();
   }
 
   update() {
@@ -925,155 +586,9 @@ class MyScene extends THREE.Scene {
       this.camera.position.copy(head).addScaledVector(postDir, this._springArmCachedDist);
     }
 
-    // Le decimos al renderizador "visualiza la escena que te indico usando la cámara que te estoy pasando"
     this.renderer.render(this, this.getCamera());
-    const aux = this.identificarChunk(this.model.position.x, this.model.position.z);
 
-    let renderChunksAgain = false;
-    if (aux.z > (this.chunkMinMax.min.z + this.chunkMinMax.max.z) / 2) {
-      //Movemos los limites
-      this.chunkMinMax.min.z++;
-      this.chunkMinMax.max.z++;
-      renderChunksAgain = true;
-    }
-
-    //Revisar el >=0
-    if (aux.z < (this.chunkMinMax.min.z + this.chunkMinMax.max.z) / 2 && aux.z >= 0) {
-      this.chunkMinMax.min.z--;
-      this.chunkMinMax.max.z--;
-      renderChunksAgain = true;
-    }
-
-    //Parte para las x
-    if (aux.x > (this.chunkMinMax.min.x + this.chunkMinMax.max.x) / 2) {
-      //Movemos los limites
-      this.chunkMinMax.min.x++;
-      this.chunkMinMax.max.x++;
-      renderChunksAgain = true;
-    }
-
-    if (aux.x < (this.chunkMinMax.min.x + this.chunkMinMax.max.x) / 2 && aux.x >= 0) {
-      this.chunkMinMax.min.x--;
-      this.chunkMinMax.max.x--;
-      renderChunksAgain = true;
-    }
-
-    if (renderChunksAgain) {
-      for (const tipo in this.mesh) {
-        this.remove(this.mesh[tipo]);
-        this.mesh[tipo] = new THREE.InstancedMesh(this.geometriaText[tipo], this.materialesText[tipo], this.sizeIMesh[tipo]);
-        this.aplicarSombrasInstancedMesh(this.mesh[tipo]);
-      }
-
-
-      const l = {
-        "Hierba": 0,
-        "Tierra": 0,
-        "Piedra": 0,
-        "MaderaRoble": 0,
-        "HojasRoble": 0,
-        "Roca": 0,
-        "PiedraBase": 0,
-        "PiedraLuminosa": 0,
-        "Cristal": 0
-      };
-
-      const matrix = new THREE.Matrix4();
-
-      for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
-        for (let i = this.chunkMinMax.min.x; i <= this.chunkMinMax.max.x; i++) {
-          if (this.chunk[i] !== undefined && this.chunk[i][a] !== undefined) {
-            for (let j = 0; j < this.chunk[i][a].length; j++) {
-              matrix.setPosition(this.chunk[i][a][j].x, this.chunk[i][a][j].y, this.chunk[i][a][j].z);
-              this.mesh[this.chunk[i][a][j].material].setMatrixAt(l[this.chunk[i][a][j].material], matrix);
-              l[this.chunk[i][a][j].material]++;
-            }
-          }
-          else {
-            if (this.chunk[i] === undefined)
-              this.chunk[i] = [];
-            //Genera el chunk que no existia
-            var n_arboles = Math.floor(Math.random() * this.TAM_CHUNK/5);
-            var list_arboles = [];
-
-            for (let m = 0; m < n_arboles; m++) {
-              let posx =  Math.floor(Math.random()* this.TAM_CHUNK);
-              let posz = Math.floor(Math.random() * this.TAM_CHUNK);
-              while(estaColindando(posx,posz,list_arboles)){
-               posx =  Math.floor(Math.random()* this.TAM_CHUNK);
-               posz = Math.floor(Math.random() * this.TAM_CHUNK);
-              }
-              list_arboles.push({ x: posx, y: 10, z: posz });
-            }
-
-            const bloques = [];
-            for (let x = a * this.TAM_CHUNK; x < a * this.TAM_CHUNK + this.TAM_CHUNK; x++) {
-              for (let z = i * this.TAM_CHUNK; z < i * this.TAM_CHUNK + this.TAM_CHUNK; z++) {
-                const v = terrainHeight(this.noise, x, z);
-                matrix.setPosition(z * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR, x * 16 / PM.PIXELES_ESTANDAR);
-                this.mesh["Hierba"].setMatrixAt(l["Hierba"], matrix);
-
-                bloques.push({ x: z * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR, z: x * 16 / PM.PIXELES_ESTANDAR, material: "Hierba" });
-                l["Hierba"]++;
-
-                for (let indice_arbol = 0; indice_arbol < list_arboles.length; indice_arbol++) {
-                  if (list_arboles[indice_arbol].x + i * this.TAM_CHUNK === z && list_arboles[indice_arbol].z + a * this.TAM_CHUNK === x) {
-                    list_arboles[indice_arbol].y = v + 0.5;
-                    list_arboles[indice_arbol].x = list_arboles[indice_arbol].x + i * this.TAM_CHUNK;
-                    list_arboles[indice_arbol].z = list_arboles[indice_arbol].z + a * this.TAM_CHUNK;
-                  }
-                }
-                for (let s = 0; s < 3; s++) {
-                  matrix.setPosition(z * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR - s - 1, x * 16 / PM.PIXELES_ESTANDAR);
-                  this.mesh["Tierra"].setMatrixAt(l["Tierra"], matrix);
-                  bloques.push({ x: z * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR - s - 1, z: x * 16 / PM.PIXELES_ESTANDAR, material: "Tierra" });
-                  l["Tierra"]++;
-                }
-
-                for (let r = 3; r < 8; r++) {
-                  matrix.setPosition(z * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR - r - 1, x * 16 / PM.PIXELES_ESTANDAR);
-                  this.mesh["Piedra"].setMatrixAt(l["Piedra"], matrix);
-                  bloques.push({ x: z * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR - r - 1, z: x * 16 / PM.PIXELES_ESTANDAR, material: "Piedra" });
-                  l["Piedra"]++;
-                }
-              }
-            }
-            for (let indice_arbol = 0; indice_arbol < list_arboles.length; indice_arbol++) {
-              const arbol = new estructuras.ArbolRoble();
-
-              for (let r = 0; r < arbol.bloqueshojas.length; r++) {
-                matrix.setPosition(list_arboles[indice_arbol].x + arbol.bloqueshojas[r].x, list_arboles[indice_arbol].y + arbol.bloqueshojas[r].y - 0.5, list_arboles[indice_arbol].z + arbol.bloqueshojas[r].z);
-                this.mesh["HojasRoble"].setMatrixAt(l["HojasRoble"], matrix);
-                bloques.push({ x: list_arboles[indice_arbol].x + arbol.bloqueshojas[r].x, y: list_arboles[indice_arbol].y + arbol.bloqueshojas[r].y -0.5, z: list_arboles[indice_arbol].z  + arbol.bloqueshojas[r].z, material: "HojasRoble" });
-                l["HojasRoble"]++;
-              }
-
-              for (let r = 0; r < arbol.bloquesmadera.length; r++) {
-                matrix.setPosition(list_arboles[indice_arbol].x + arbol.bloquesmadera[r].x, list_arboles[indice_arbol].y + arbol.bloquesmadera[r].y -0.5, list_arboles[indice_arbol].z + arbol.bloquesmadera[r].z);
-                this.mesh["MaderaRoble"].setMatrixAt(l["MaderaRoble"], matrix);
-                bloques.push({ x: list_arboles[indice_arbol].x + arbol.bloquesmadera[r].x, y: list_arboles[indice_arbol].y + arbol.bloquesmadera[r].y -0.5, z: list_arboles[indice_arbol].z + arbol.bloquesmadera[r].z, material: "MaderaRoble" });
-                l["MaderaRoble"]++;
-              }
-            }
-            this.chunkCollision.push(bloques);
-            const chunkIndex = this.identificarChunk(bloques[0].x, bloques[0].z);
-
-            if (this.chunk[chunkIndex.x] === undefined)
-              this.chunk[chunkIndex.x] = [];
-
-            this.chunk[chunkIndex.x][chunkIndex.z] = bloques;
-          }
-
-        }
-      }
-
-      for (const tipo in this.mesh) {
-        if (l[tipo] !== undefined) this.mesh[tipo].count = l[tipo];
-        this.mesh[tipo].instanceMatrix.needsUpdate = true;
-        this.add(this.mesh[tipo]);
-      }
-
-    }
+    this.chunkManager.updateScroll(this.model.position.x, this.model.position.z);
 
 
     // Feedback throttled a ~10Hz: el raycaster contra cada InstancedMesh
@@ -1083,146 +598,31 @@ class MyScene extends THREE.Scene {
     if (this.guiControls.activarWireframe) {
       const now = performance.now();
       if (!this._feedbackNext || now >= this._feedbackNext) {
-        this.actualizarFeedback();
+        this.updateFeedback();
         this._feedbackNext = now + 100;
       }
     }
     else {
-      this.cajaSeleccionada.visible = false;
+      this.raycast.hideSelectionBox();
     }
 
-    //Se eligen todos los bloques de la distancia de renderizado para el calculo de fisicas, solo para el personaje
-    let colisiones =[];
+    const blocks = this.chunkManager.getPlayerCollisions();
+    this.model.update(blocks, this.mapTeclas);
 
-    for(let i =this.chunkMinMax.min.x; i<this.chunkMinMax.max.x; i++){
-      for(let j =this.chunkMinMax.min.z; j<this.chunkMinMax.max.z; j++){
-        if(this.chunk[i]!== undefined && this.chunk[i][j]!== undefined){
-          colisiones = colisiones.concat(this.chunk[i][j]);
-        }
-      }
-    }
-
-    this.model.update(colisiones, this.mapTeclas);
-
-
-    this.zombie.cabezaW1.lookAt(this.model.position.x, this.model.position.y,this.model.position.z);
-    this.zombie.lookAt(this.model.position.x, this.zombie.position.y,this.model.position.z);
-    this.zombie.boundingBox.lookAt(this.model.position.x, this.zombie.boundingBox.position.y,this.model.position.z)
-
-    //Se escoge el chunk en el que esta el zombie
-    const zombieChunk = this.identificarChunk(this.zombie.position.x, this.zombie.position.z);
-
-    let zombieColisiones=[];
-    for(let i=Math.floor(zombieChunk.x-this.DISTANCIA_RENDER/2); i<=Math.floor(zombieChunk.x+this.DISTANCIA_RENDER/2); i++){
-      for(let j=Math.floor(zombieChunk.z-this.DISTANCIA_RENDER/2); j<=Math.floor(zombieChunk.z+this.DISTANCIA_RENDER/2); j++){
-        if(this.chunk[i]!== undefined && this.chunk[i][j]!== undefined){
-          zombieColisiones = zombieColisiones.concat(this.chunk[i][j]);
-        }
-      }
-    }
-
-    this.zombie.update(zombieColisiones);
-
-
-    //el cerdo mira a la primera posicion de puntoscerdos
-    this.cerdo.lookAt(this.puntoscerdos[this.poscerdo].x, this.cerdo.position.y, this.puntoscerdos[this.poscerdo].z);
-    this.cerdo.boundingBox.lookAt(this.puntoscerdos[this.poscerdo].x, this.cerdo.boundingBox.position.y, this.puntoscerdos[this.poscerdo].z);
-  
-
+    this.npcManager.update(delta);
     
-    //el cerdo para de moverse durante 2 segundos
 
-    if(this.tiempoCerdo<=0) {
 
-      if(Math.abs(this.cerdo.position.x - this.puntoscerdos[this.poscerdo].x) <= 1 && Math.abs(this.cerdo.position.z - this.puntoscerdos[this.poscerdo].z) <= 1){
-        this.poscerdo = (this.poscerdo + 1) % this.puntoscerdos.length;
-        this.tiempoCerdo = 200;
-      }
 
-          const cerdoChunk= this.identificarChunk(this.cerdo.position.x, this.cerdo.position.z);
-
-          let cerdoColisiones=[];
-          for(let i=Math.floor(cerdoChunk.x-this.DISTANCIA_RENDER/2); i<=Math.floor(cerdoChunk.x+this.DISTANCIA_RENDER/2); i++){
-            for(let j=Math.floor(cerdoChunk.z-this.DISTANCIA_RENDER/2); j<=Math.floor(cerdoChunk.z+this.DISTANCIA_RENDER/2); j++){
-              if(this.chunk[i]!== undefined && this.chunk[i][j]!== undefined){
-                cerdoColisiones = cerdoColisiones.concat(this.chunk[i][j]);
-              }
-            }
-          }          
-
-          this.cerdo.update(cerdoColisiones, delta);
-}
-    else{
-          this.tiempoCerdo -= 1;
-
-    }
-    
-    // Este método debe ser llamado cada vez que queramos visualizar la escena de nuevo.
-    // Literalmente le decimos al navegador: "La próxima vez que haya que refrescar la pantalla, llama al método que te indico".
-    // Si no existiera esta línea,  update()  se ejecutaría solo la primera vez.
     requestAnimationFrame(() => this.update())
   }
 
-  onDocumentWheel(event) {
-    const tiles = /** @type {HTMLCollectionOf<HTMLElement>} */ (document.getElementsByClassName("tile"));
-
-    tiles[this.objeto].style.border = "";
-
-    if (event.deltaY > 0) {
-      this.objeto = (this.objeto + 1) % tiles.length;
-    }
-    else {
-      if (this.objeto === 0)
-        this.objeto = tiles.length - 1;
-      else
-        this.objeto--;
-    }
-
-    tiles[this.objeto].style.border = "3px solid black";
-  }
 }
 
 
-/// La función   main
+// main
 window.addEventListener('DOMContentLoaded', function () {
-  // Se instancia la escena pasándole el  div  que se ha creado en el html para visualizar
   const scene = new MyScene("#WebGL-output");
-
-  // Se añaden los listener de la aplicación. En este caso, el que va a comprobar cuándo se modifica el tamaño de la ventana de la aplicación.
   window.addEventListener("resize", () => scene.onWindowResize());
-
-  const clearAllKeys = () => {
-    for (const k in scene.mapTeclas) scene.mapTeclas[k] = false;
-    scene.model.resetPosicion();
-  };
-
-  window.addEventListener("keydown", (event) => {
-    scene.mapTeclas[event.key.toUpperCase()] = true;
-  });
-
-  window.addEventListener("keyup", (event) => {
-    scene.mapTeclas[event.key.toUpperCase()] = false;
-    event.stopImmediatePropagation();
-
-    let allFalse = true;
-    for (const aux in scene.mapTeclas) {
-      if (scene.mapTeclas[aux]) allFalse = false;
-    }
-    if (allFalse) scene.model.resetPosicion();
-  });
-
-  // Clear keys when window loses focus — prevents stuck WASD after alt-tab
-  // or after pointer-capture (right-drag) swallows keyup events.
-  window.addEventListener("blur", clearAllKeys);
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) clearAllKeys();
-  });
-
-  //----------------------------------------------------------------------------------------
-  window.addEventListener("mousedown", (event) => scene.onDocumentMouseDown(event));
-  window.addEventListener("mouseup", (event) => scene.onDocumentMouseUp(event));
-  window.addEventListener("contextmenu", (event) => event.preventDefault());
-  window.addEventListener("wheel", (event) => scene.onDocumentWheel(event));
-  // Que no se nos olvide, la primera visualización.
   scene.update();
 });

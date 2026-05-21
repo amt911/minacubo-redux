@@ -55,6 +55,12 @@ Romper `MyScene.js` (1105 líneas):
 - [ ] Convertir todos los archivos y código al inglés.
 - [ ] Mejorar el feedback del cubo que se va a crear/eliminar (ahora mismo es muy fino y tiene una linea en el cuadrado)
 
+Mejorar la gestión de chunks:
+
+- [ ] Hacer el algoritmo más eficiente.
+- [ ] Hacer que se generen chunks en ejes negativos (ahora mismo no se generan y el personaje se puede caer).
+- [ ] Intentar quitar la niebla, para ello hay que mejorar muchisimo la gestion del juego en general.
+
 ## Fase 4 — Features juego
 
 - [ ] Health/Damage Esteban con barra HUD
