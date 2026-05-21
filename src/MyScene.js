@@ -386,17 +386,19 @@ class MyScene extends THREE.Scene {
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.set(1024, 1024);
 
-    // Frustum orto centrado en el jugador (updateSunPosition lo desplaza).
-    // 25 unidades cubre ~5 chunks alrededor del jugador — suficiente para
-    // sombras visibles sin renderizar todo el mundo visible en el shadow pass.
-    const shadowExtent = 25;
+    // Tight ortho frustum centred on the player (updateSunPosition follows).
+    // 16 units = ~3 chunks. Shadows beyond that distance are barely visible
+    // anyway and the shadow pass cost scales with the ortho area + the
+    // number of cubes inside it. Was 25 → ~40% fewer fragments in the
+    // shadow pass and sharper near-shadows from a 1024² shadow map.
+    const shadowExtent = 16;
     const cam = this.sunLight.shadow.camera;
     cam.left = -shadowExtent;
     cam.right = shadowExtent;
     cam.top = shadowExtent;
     cam.bottom = -shadowExtent;
     cam.near = 0.5;
-    cam.far = 500;
+    cam.far = 200;
     cam.updateProjectionMatrix();
 
     this.sunLight.shadow.bias = -0.0005;
