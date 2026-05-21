@@ -282,14 +282,21 @@ export class ChunkManager {
     const TC = this.TAM_CHUNK;
     const DR = this.DISTANCIA_RENDER;
 
-    // Sync gen chunk (0,0) so we have something to look at + NPC spawn data.
-    const getHeight = (x, z) => terrainHeight(this._noise, x, z);
-    const { blocks: spawnBlocks, treeList } = generateChunkBlocks(getHeight, 0, 0, TC);
-    this._storeChunkData(0, 0, spawnBlocks);
+    // The player spawns at the centre of the window — sync-generate THAT
+    // chunk so something is visible before the worker pool catches up.
+    // Using (0,0) instead would leave the player staring at empty space
+    // because the spawn chunk would be ~DR/2 chunks behind them.
+    const spawnCX = Math.floor(DR / 2);
+    const spawnCZ = Math.floor(DR / 2);
 
+    const getHeight = (x, z) => terrainHeight(this._noise, x, z);
+    const { blocks: spawnBlocks, treeList } = generateChunkBlocks(getHeight, spawnCX, spawnCZ, TC);
+    this._storeChunkData(spawnCX, spawnCZ, spawnBlocks);
+
+    // NPC spawn picks random local coords inside the spawn chunk.
     const zombieLX = Math.floor(Math.random() * TC);
     const zombieLZ = Math.floor(Math.random() * TC);
-    const zombieY  = terrainHeight(this._noise, zombieLX, zombieLZ);
+    const zombieY  = terrainHeight(this._noise, spawnCX * TC + zombieLX, spawnCZ * TC + zombieLZ);
     const zombieSpawn = { x: zombieLX, y: zombieY, z: zombieLZ };
 
     const pigWaypoints = [];
@@ -301,33 +308,26 @@ export class ChunkManager {
         px = Math.floor(Math.random() * TC);
         pz = Math.floor(Math.random() * TC);
       }
-      const py = terrainHeight(this._noise, px, pz);
+      const py = terrainHeight(this._noise, spawnCX * TC + px, spawnCZ * TC + pz);
       pigWaypoints.push({ x: px, y: py, z: pz });
     }
 
     // Queue worker gen for every other chunk in the initial window + a
-    // PRELOAD_RING outside it. Dispatch in distance-from-spawn order so the
-    // worker pool (FIFO) processes chunks the player will actually see first.
+    // PRELOAD_RING outside it. Tasks are re-prioritised by distance to the
+    // window centre on each dispatch (see _tryDispatch).
     const R = ChunkManager.PRELOAD_RING;
-    const spawnCX = Math.floor(DR / 2);
-    const spawnCZ = Math.floor(DR / 2);
-    const queue = [];
     for (let i = -R; i < DR + R; i++) {
       for (let j = -R; j < DR + R; j++) {
-        if (i === 0 && j === 0) continue;
-        queue.push({ i, j, d: Math.abs(i - spawnCX) + Math.abs(j - spawnCZ) });
+        if (i === spawnCX && j === spawnCZ) continue;
+        this._genChunkAsync(i, j).then((blocks) => {
+          this._storeChunkData(i, j, blocks);
+          this._meshQueue.push({ chunkX: i, chunkZ: j });
+        });
       }
     }
-    queue.sort((a, b) => a.d - b.d);
-    for (const { i, j } of queue) {
-      this._genChunkAsync(i, j).then((blocks) => {
-        this._storeChunkData(i, j, blocks);
-        this._meshQueue.push({ chunkX: i, chunkZ: j });
-      });
-    }
 
-    // Show chunk (0,0) immediately so the player isn't staring at void.
-    this._buildChunkMesh(0, 0);
+    // Show the spawn chunk immediately so the player isn't staring at void.
+    this._buildChunkMesh(spawnCX, spawnCZ);
 
     return { zombieSpawn, pigWaypoints };
   }
