@@ -77,19 +77,22 @@ export class RaycastInteraction {
     const mesh = /** @type {THREE.InstancedMesh} */ (hit.object);
     this._instanceMatrix.identity();
     mesh.getMatrixAt(hit.instanceId, this._instanceMatrix);
-    // Instance matrices store positions relative to mesh.position; add it back
-    // to recover the world-space block centre. Mesh has no rotation/scale.
-    const ix = this._instanceMatrix.elements[12];
-    const iy = this._instanceMatrix.elements[13];
-    const iz = this._instanceMatrix.elements[14];
-    const wx = ix + mesh.position.x;
-    const wy = iy + mesh.position.y;
-    const wz = iz + mesh.position.z;
+    // Instance matrices store positions relative to mesh.position. Sum, then
+    // snap to the block grid: x/z are integers, y is a half-integer (n + 0.5).
+    // The snap is required because InstancedMesh.instanceMatrix is Float32 —
+    // the round-trip through it loses precision and strict-equality findIndex
+    // against the stored coords would otherwise miss.
+    const rawX = this._instanceMatrix.elements[12] + mesh.position.x;
+    const rawY = this._instanceMatrix.elements[13] + mesh.position.y;
+    const rawZ = this._instanceMatrix.elements[14] + mesh.position.z;
+    const wx = Math.round(rawX);
+    const wy = Math.round(rawY - 0.5) + 0.5;
+    const wz = Math.round(rawZ);
 
     if (forRemoval) {
       return { x: wx, y: wy, z: wz };
     }
-    // Placement: step one block along the hit face normal.
+    // Placement: step one block along the hit face normal (axis-aligned ±1).
     const n = hit.face.normal;
     return { x: wx + n.x, y: wy + n.y, z: wz + n.z };
   }

@@ -82,15 +82,22 @@ Mejorar la gestión de chunks:
 
 - [x] Frustum culling chunks fuera de cámara
 - [x] Face culling: blocks with all 6 neighbours occupied are skipped (~50-70% drop)
-- [ ] Generación chunks en Web Worker
-- [ ] Greedy meshing (bloques contiguos misma cara → quad único)
-- [ ] Per-face culling (only emit faces with no neighbour, intermediate between block-cull and greedy)
+- [x] Generación chunks en Web Worker
+- [x] Cap renderer.pixelRatio (HiDPI screens render at 4× cost)
+- [x] MeshPhong → MeshLambert (cheaper per-pixel)
+- [x] Preload 1-chunk ring around visible window (chunk-cross no longer lags)
+- [x] Time-budgeted mesh tick + nearest-first ordering
+- [ ] Shrink sun shadow camera frustum (~30% shadow-pass cost)
+- [ ] Per-face culling (only emit faces with no neighbour, ~4-5× triangle drop)
+- [ ] Greedy meshing (bloques contiguos misma cara → quad único, ~10× drop)
 - [ ] Texture atlas (precondition for greedy meshing + reduces material switches)
 - [ ] LOD chunks lejanos (geometría simplificada)
-- [ ] Shadow optimisations: smaller shadow camera frustum, optional CSM
-- [ ] Cap renderer.pixelRatio (HiDPI screens render at 4× cost)
-- [ ] MeshPhong → MeshLambert (cheaper per-pixel)
+- [ ] Optional CSM (cascaded shadow maps) for sharper near + cheaper far shadows
 - [ ] Cull underground when player Y is above terrain top
+- [ ] Octree / grid spatial index for raycasts (linear iteration over allMeshes)
+- [ ] Skip raycast feedback when pointer not locked + game idle
+- [ ] Cache getPlayerCollisions when player moves <1 block between frames
+- [ ] Move mesh-build occupancy set + grouping to web worker too
 
 ## Fase 6 — Ambicioso
 
