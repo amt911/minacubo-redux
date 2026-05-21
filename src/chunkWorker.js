@@ -1,13 +1,10 @@
 // Module Web Worker — generates chunk block data off the main thread.
-// Cannot import `noise.js` directly because it depends on `simplex-noise`
-// via a bare specifier (workers don't see the document's importmap), so we
-// inline mulberry32 / fbm / terrainHeight and load simplex-noise via the
-// dev-server-resolved absolute URL.
+// Imports simplex-noise via absolute URL because workers don't inherit the
+// document's importmap. Static import (not top-level await) so the worker
+// finishes loading deterministically before any messages are processed.
 
 import { generateChunkBlocks } from './chunkGen.js';
-
-const noiseModUrl = '/node_modules/simplex-noise/dist/esm/simplex-noise.js';
-const { createNoise2D } = await import(noiseModUrl);
+import { createNoise2D } from '/node_modules/simplex-noise/dist/esm/simplex-noise.js';
 
 function mulberry32(seed) {
   let a = seed >>> 0;

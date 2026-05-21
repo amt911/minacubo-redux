@@ -198,6 +198,10 @@ export class ChunkManager {
     mesh.userData.chunkZ = chunkZ;
     mesh.userData.type = type;
 
+    // Force matrixWorld now so raycasts (block break / placement / spring
+    // arm) work before the next frame's auto-update.
+    mesh.updateMatrixWorld(true);
+
     if (!this.chunkMeshes[chunkX]) this.chunkMeshes[chunkX] = {};
     if (!this.chunkMeshes[chunkX][chunkZ]) this.chunkMeshes[chunkX][chunkZ] = {};
     this.chunkMeshes[chunkX][chunkZ][type] = mesh;
