@@ -70,18 +70,11 @@ export class ChunkManager {
     }
 
     // Worker pool for off-main-thread chunk data generation.
-    // Tasks live in a JS-side queue until dispatched, so we can re-sort by
-    // distance-to-player on every dispatch. Workers are kept one-task-deep
-    // (no postMessage backlog) — otherwise the worker FIFO would lock in an
-    // outdated order while the player moves.
     /** @type {Worker[]} */
     this._workers = [];
-    /** @type {boolean[]} */
-    this._workerBusy = [];
-    /** @type {Array<{chunkX: number, chunkZ: number, resolve: (blocks: Array<{x:number,y:number,z:number,material:string}>) => void}>} */
-    this._pendingTasks = [];
-    /** @type {Map<number, {resolve: Function, workerIdx: number}>} */
-    this._inFlight = new Map();
+    this._workerIdx = 0;
+    /** @type {Map<number, (blocks: Array<{x:number,y:number,z:number,material:string}>) => void>} */
+    this._pendingChunks = new Map();
     this._nextTaskId = 0;
 
     const WORKER_COUNT = 4;
@@ -89,64 +82,34 @@ export class ChunkManager {
       const w = new Worker(new URL('./chunkWorker.js', import.meta.url), { type: 'module' });
       w.onmessage = (e) => this._onWorkerMessage(e);
       this._workers.push(w);
-      this._workerBusy.push(false);
     }
   }
 
   // ─── worker plumbing ──────────────────────────────────────────────────────
 
   /**
-   * Queue chunk-data generation. Returns a promise that resolves with the
-   * block list when an available worker has produced it. The queue is
-   * re-prioritised by distance to the window centre on every dispatch.
+   * Request chunk block data from a worker (round-robin dispatch).
    * @param {number} chunkX
    * @param {number} chunkZ
    * @returns {Promise<Array<{x:number,y:number,z:number,material:string}>>}
    */
   _genChunkAsync(chunkX, chunkZ) {
     return new Promise((resolve) => {
-      this._pendingTasks.push({ chunkX, chunkZ, resolve });
-      this._tryDispatch();
-    });
-  }
-
-  _tryDispatch() {
-    if (this._pendingTasks.length === 0) return;
-    const idleIdx = this._workerBusy.indexOf(false);
-    if (idleIdx === -1) return; // every worker busy — wait for completion
-
-    // Re-prioritise the queue against current window centre so the chunks
-    // the player is heading toward jump to the front.
-    const { min, max } = this.chunkMinMax;
-    const cx = (min.x + max.x) / 2;
-    const cz = (min.z + max.z) / 2;
-    let bestI = 0;
-    let bestD = Infinity;
-    for (let i = 0; i < this._pendingTasks.length; i++) {
-      const t = this._pendingTasks[i];
-      const d = Math.abs(t.chunkX - cx) + Math.abs(t.chunkZ - cz);
-      if (d < bestD) { bestD = d; bestI = i; }
-    }
-    const task = this._pendingTasks.splice(bestI, 1)[0];
-
-    this._workerBusy[idleIdx] = true;
-    const id = this._nextTaskId++;
-    this._inFlight.set(id, { resolve: task.resolve, workerIdx: idleIdx });
-    this._workers[idleIdx].postMessage({
-      type: 'gen', id, chunkX: task.chunkX, chunkZ: task.chunkZ,
-      TC: this.TAM_CHUNK, seed: this.seed,
+      const id = this._nextTaskId++;
+      this._pendingChunks.set(id, resolve);
+      const worker = this._workers[this._workerIdx];
+      this._workerIdx = (this._workerIdx + 1) % this._workers.length;
+      worker.postMessage({ type: 'gen', id, chunkX, chunkZ, TC: this.TAM_CHUNK, seed: this.seed });
     });
   }
 
   _onWorkerMessage(e) {
     const data = e.data;
     if (data.type !== 'result') return;
-    const entry = this._inFlight.get(data.id);
-    if (!entry) return;
-    this._inFlight.delete(data.id);
-    this._workerBusy[entry.workerIdx] = false;
-    entry.resolve(data.blocks);
-    this._tryDispatch();
+    const resolve = this._pendingChunks.get(data.id);
+    if (!resolve) return;
+    this._pendingChunks.delete(data.id);
+    resolve(data.blocks);
   }
 
   _storeChunkData(chunkX, chunkZ, blocks) {
@@ -313,17 +276,22 @@ export class ChunkManager {
     }
 
     // Queue worker gen for every other chunk in the initial window + a
-    // PRELOAD_RING outside it. Tasks are re-prioritised by distance to the
-    // window centre on each dispatch (see _tryDispatch).
+    // PRELOAD_RING outside it. Dispatch nearest-spawn-first so the worker
+    // pool (FIFO) processes chunks the player will actually see first.
     const R = ChunkManager.PRELOAD_RING;
+    const queue = [];
     for (let i = -R; i < DR + R; i++) {
       for (let j = -R; j < DR + R; j++) {
         if (i === spawnCX && j === spawnCZ) continue;
-        this._genChunkAsync(i, j).then((blocks) => {
-          this._storeChunkData(i, j, blocks);
-          this._meshQueue.push({ chunkX: i, chunkZ: j });
-        });
+        queue.push({ i, j, d: Math.abs(i - spawnCX) + Math.abs(j - spawnCZ) });
       }
+    }
+    queue.sort((a, b) => a.d - b.d);
+    for (const { i, j } of queue) {
+      this._genChunkAsync(i, j).then((blocks) => {
+        this._storeChunkData(i, j, blocks);
+        this._meshQueue.push({ chunkX: i, chunkZ: j });
+      });
     }
 
     // Show the spawn chunk immediately so the player isn't staring at void.
