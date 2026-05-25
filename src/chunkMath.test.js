@@ -81,4 +81,20 @@ describe('shiftMinMaxIfNeeded', () => {
     shiftMinMaxIfNeeded({ x: 4, z: 4 }, w);
     expect(w).toEqual(window(0, 0, 6, 6));
   });
+
+  // Regression: with DR=20 (window 0..19), midpoint is 9.5. Player spawn at
+  // chunk 10 would slide forward, then chunk 10 < 10.5 slides back, etc.
+  // Window has to stay put for any chunk within the [floor, ceil] band.
+  it('even-sized window: player chunk at either side of half-integer mid → no shift', () => {
+    const w = window(0, 0, 19, 19);
+    expect(shiftMinMaxIfNeeded({ x: 10, z: 10 }, w)).toEqual(w);
+    expect(shiftMinMaxIfNeeded({ x: 9, z: 9 }, w)).toEqual(w);
+    expect(shiftMinMaxIfNeeded({ x: 9, z: 10 }, w)).toEqual(w);
+  });
+
+  it('even-sized window: shifts only when player chunk leaves the hysteresis band', () => {
+    const w = window(0, 0, 19, 19);
+    expect(shiftMinMaxIfNeeded({ x: 11, z: 11 }, w)).toEqual(window(1, 1, 20, 20));
+    expect(shiftMinMaxIfNeeded({ x: 8, z: 8 }, w)).toEqual(window(-1, -1, 18, 18));
+  });
 });

@@ -77,6 +77,13 @@ export class ChunkManager {
     this._pendingChunks = new Map();
     this._nextTaskId = 0;
 
+    // Dedupe in-flight gens by chunk coords. Without this, fast scrolling
+    // dispatches the same chunk multiple times before the first result
+    // returns — workers get clogged with duplicate work and the visible
+    // chunks lag behind.
+    /** @type {Map<string, Promise<Array<{x:number,y:number,z:number,material:string}>>>} */
+    this._pendingGens = new Map();
+
     const WORKER_COUNT = 4;
     for (let i = 0; i < WORKER_COUNT; i++) {
       const w = new Worker(new URL('./chunkWorker.js', import.meta.url), { type: 'module' });
@@ -94,13 +101,23 @@ export class ChunkManager {
    * @returns {Promise<Array<{x:number,y:number,z:number,material:string}>>}
    */
   _genChunkAsync(chunkX, chunkZ) {
-    return new Promise((resolve) => {
+    const key = chunkX + ',' + chunkZ;
+    const existing = this._pendingGens.get(key);
+    if (existing) return existing;
+
+    const p = new Promise((resolve) => {
       const id = this._nextTaskId++;
       this._pendingChunks.set(id, resolve);
       const worker = this._workers[this._workerIdx];
       this._workerIdx = (this._workerIdx + 1) % this._workers.length;
       worker.postMessage({ type: 'gen', id, chunkX, chunkZ, TC: this.TAM_CHUNK, seed: this.seed });
+    }).then((blocks) => {
+      this._pendingGens.delete(key);
+      return blocks;
     });
+
+    this._pendingGens.set(key, p);
+    return p;
   }
 
   _onWorkerMessage(e) {
@@ -310,7 +327,6 @@ export class ChunkManager {
   tick() {
     if (this._meshQueue.length === 0) return;
 
-    const R = ChunkManager.PRELOAD_RING;
     const { min, max } = this.chunkMinMax;
     const cx = (min.x + max.x) / 2;
     const cz = (min.z + max.z) / 2;
@@ -324,10 +340,15 @@ export class ChunkManager {
 
     // Time-budget the mesh builds so we don't blow a frame even with a deep
     // backlog. ~6ms leaves headroom for the rest of the frame at 60 FPS.
+    // No window-bound filter here: a chunk that's already meshed will be
+    // disposed by updateScroll() if it's outside the visible range — but
+    // silently dropping a queued build leaves a chunk with data and no
+    // mesh, which is exactly what produces the "chunk pops in when you
+    // walk past it" bug.
     const start = performance.now();
     while (this._meshQueue.length > 0 && performance.now() - start < 6) {
       const { chunkX, chunkZ } = this._meshQueue.shift();
-      if (chunkX < min.x - R || chunkX > max.x + R || chunkZ < min.z - R || chunkZ > max.z + R) continue;
+      if (this.chunkMeshes[chunkX]?.[chunkZ]) continue;
       this._buildChunkMesh(chunkX, chunkZ);
     }
   }
@@ -342,24 +363,35 @@ export class ChunkManager {
   updateScroll(playerX, playerZ) {
     const aux = identifyChunk(playerX, playerZ, this.TAM_CHUNK);
     const { min, max } = this.chunkMinMax;
-    const oldMinX = min.x, oldMaxX = max.x, oldMinZ = min.z, oldMaxZ = max.z;
     let moved = false;
 
+    // Hysteresis around the midpoint. With an even-sized window (DR even)
+    // midX/midZ land on a half-integer, so any integer player chunk is
+    // strictly on one side of it. Without the ceil/floor band the window
+    // would slide every single frame, ping-ponging between two states and
+    // never giving workers time to actually mesh anything — chunks far
+    // from spawn simply never appeared.
     const midX = (min.x + max.x) / 2;
     const midZ = (min.z + max.z) / 2;
 
-    if (aux.z > midZ)      { min.z++; max.z++; moved = true; }
-    else if (aux.z < midZ) { min.z--; max.z--; moved = true; }
+    if (aux.z > Math.ceil(midZ))       { min.z++; max.z++; moved = true; }
+    else if (aux.z < Math.floor(midZ)) { min.z--; max.z--; moved = true; }
 
-    if (aux.x > midX)      { min.x++; max.x++; moved = true; }
-    else if (aux.x < midX) { min.x--; max.x--; moved = true; }
+    if (aux.x > Math.ceil(midX))       { min.x++; max.x++; moved = true; }
+    else if (aux.x < Math.floor(midX)) { min.x--; max.x--; moved = true; }
 
     if (!moved) return false;
 
-    // Dispose chunks that fell outside the (new window + preload ring).
+    // Dispose every mesh outside the new window+R. Scan chunkMeshes keys
+    // directly (not the old window bounds) because tick() may have built
+    // meshes for chunks that arrived from workers after we'd already
+    // scrolled past their origin window — those would leak otherwise.
     const R = ChunkManager.PRELOAD_RING;
-    for (let a = oldMinZ - R; a <= oldMaxZ + R; a++) {
-      for (let i = oldMinX - R; i <= oldMaxX + R; i++) {
+    for (const xKey in this.chunkMeshes) {
+      const i = +xKey;
+      const col = this.chunkMeshes[xKey];
+      for (const zKey in col) {
+        const a = +zKey;
         if (i < min.x - R || i > max.x + R || a < min.z - R || a > max.z + R) {
           this._disposeChunkMesh(i, a);
         }

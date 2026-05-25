@@ -50,13 +50,16 @@ export function shiftMinMaxIfNeeded(playerChunk, minMax) {
   const min = { ...minMax.min };
   const max = { ...minMax.max };
 
+  // Even-window hysteresis: with DR even, mid is a half-integer, so an
+  // integer chunk index always sits on one side of it. Without ceil/floor
+  // the window would oscillate every frame between two states.
   const midZ = (min.z + max.z) / 2;
-  if (playerChunk.z > midZ)      { min.z++; max.z++; }
-  else if (playerChunk.z < midZ) { min.z--; max.z--; }
+  if (playerChunk.z > Math.ceil(midZ))       { min.z++; max.z++; }
+  else if (playerChunk.z < Math.floor(midZ)) { min.z--; max.z--; }
 
   const midX = (min.x + max.x) / 2;
-  if (playerChunk.x > midX)      { min.x++; max.x++; }
-  else if (playerChunk.x < midX) { min.x--; max.x--; }
+  if (playerChunk.x > Math.ceil(midX))       { min.x++; max.x++; }
+  else if (playerChunk.x < Math.floor(midX)) { min.x--; max.x--; }
 
   return { min, max };
 }
