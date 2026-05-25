@@ -55,8 +55,6 @@ export class ChunkManager {
 
     /** @type {Object<number, Object<number, Record<string, THREE.InstancedMesh>>>} */
     this.chunkMeshes = {};
-    /** @type {THREE.InstancedMesh[]} */
-    this.allMeshes = [];
 
     // Mesh build queue — drained by tick() within a per-frame time budget.
     /** @type {Array<{chunkX:number, chunkZ:number}>} */
@@ -74,20 +72,11 @@ export class ChunkManager {
     this._buildTimeAvgMs = 0;
     this._buildCount = 0;
 
-    // Shared geometry boundingSphere — overridden per type to cover a chunk
-    // centred on its centroid. 20 covers the TC×TC horizontal extent and the
-    // typical block-y range comfortably. Tall mountain tops can extend past
-    // this and occasionally pop in/out at the frustum edge; the fix is a
-    // per-chunk bounding sphere via cloned geometry (TODO Fase 5) but that
-    // costs ~5 MB and dispose plumbing — not worth it until we hit the
-    // mountain pop-in for real.
-    const sphereRadius = 20;
-    for (const tipo in this._geo) {
-      this._geo[tipo].boundingSphere = new THREE.Sphere(
-        new THREE.Vector3(0, 0, 0),
-        sphereRadius
-      );
-    }
+    // Per-chunk bounding sphere is now computed in _createChunkMaterialMesh
+    // via a per-mesh geometry clone, so we don't touch the shared geometry
+    // here. The clone is cheap (BoxGeometry: 24 verts, 36 indices ≈ 600 B
+    // per mesh) and lets the frustum cull each chunk based on the real
+    // extent of its emitted blocks instead of a worst-case shared radius.
 
     // Worker pool for off-main-thread chunk data generation.
     /** @type {Worker[]} */
@@ -248,17 +237,38 @@ export class ChunkManager {
   }
 
   _createChunkMaterialMesh(chunkX, chunkZ, type, list) {
-    const mesh = new THREE.InstancedMesh(this._geo[type], this._mat[type], list.length);
-
-    let sumX = 0, sumY = 0, sumZ = 0;
+    // Bounding box of this material's instances → tight frustum sphere.
+    // Centre the mesh on the bbox centre (not the arithmetic mean of block
+    // positions) so the sphere can sit at the local origin with the
+    // smallest possible radius.
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
     for (let i = 0; i < list.length; i++) {
-      sumX += list[i].x;
-      sumY += list[i].y;
-      sumZ += list[i].z;
+      const b = list[i];
+      if (b.x < minX) minX = b.x; if (b.x > maxX) maxX = b.x;
+      if (b.y < minY) minY = b.y; if (b.y > maxY) maxY = b.y;
+      if (b.z < minZ) minZ = b.z; if (b.z > maxZ) maxZ = b.z;
     }
-    const cx = sumX / list.length;
-    const cy = sumY / list.length;
-    const cz = sumZ / list.length;
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    const cz = (minZ + maxZ) / 2;
+
+    // Clone the shared geometry so we can override its boundingSphere per
+    // chunk without affecting other chunks of the same material. The clone
+    // owns its own buffers; dispose it in _disposeChunkMesh below.
+    const geo = this._geo[type].clone();
+    const ex = (maxX - minX) / 2;
+    const ey = (maxY - minY) / 2;
+    const ez = (maxZ - minZ) / 2;
+    // +0.87 ≈ half-diagonal of a single block (sqrt(3)/2). The bbox covers
+    // block centres; adding this corner-margin guarantees the sphere
+    // contains the full geometry, not just centre points.
+    geo.boundingSphere = new THREE.Sphere(
+      new THREE.Vector3(0, 0, 0),
+      Math.sqrt(ex * ex + ey * ey + ez * ez) + 0.87,
+    );
+
+    const mesh = new THREE.InstancedMesh(geo, this._mat[type], list.length);
     mesh.position.set(cx, cy, cz);
 
     const matrix = new THREE.Matrix4();
@@ -284,20 +294,26 @@ export class ChunkManager {
     if (!this.chunkMeshes[chunkX][chunkZ]) this.chunkMeshes[chunkX][chunkZ] = {};
     this.chunkMeshes[chunkX][chunkZ][type] = mesh;
     this._scene.add(mesh);
-    this.allMeshes.push(mesh);
   }
 
   _disposeChunkMesh(chunkX, chunkZ) {
-    const chunkObj = this.chunkMeshes[chunkX]?.[chunkZ];
+    const col = this.chunkMeshes[chunkX];
+    const chunkObj = col?.[chunkZ];
     if (!chunkObj) return;
     for (const type in chunkObj) {
       const mesh = chunkObj[type];
       this._scene.remove(mesh);
+      // Per-chunk cloned geometry — release its GPU buffers too. The shared
+      // material is owned by BlockRegistry and must NOT be disposed here.
+      mesh.geometry.dispose();
       mesh.dispose();
-      const idx = this.allMeshes.indexOf(mesh);
-      if (idx >= 0) this.allMeshes.splice(idx, 1);
     }
-    delete this.chunkMeshes[chunkX][chunkZ];
+    delete col[chunkZ];
+    // Drop the empty column object too — long-running sessions used to
+    // accumulate hundreds of empty {} entries in chunkMeshes from chunks
+    // the player walked past, slowing every iteration over chunkMeshes.
+    for (const _ in col) return;
+    delete this.chunkMeshes[chunkX];
   }
 
   /**
