@@ -81,8 +81,16 @@ export class NPCManager {
   // zombies launching straight up off each other. Post-physics pairwise
   // separation pushes them apart horizontally only, no autojump bait, no
   // contribution to the per-zombie collision N×blocks workload.
+  //
+  // SEPARATION_MAX_STEP caps the total per-zombie push per frame. Without it,
+  // a zombie pinned at the centre of a 20-strong horde could accumulate
+  // ~19 × 0.4 = 7.6 units of push in a single frame — fast enough to fly the
+  // horde past FREEZE_RANGE in under a second and "disappear" while frozen
+  // in place far from the player.
   static SEPARATION_DIST = 0.8;
   static SEPARATION_DIST_SQ = 0.8 * 0.8;
+  static SEPARATION_PUSH_FACTOR = 0.2;   // softer per-pair push (was 0.5)
+  static SEPARATION_MAX_STEP = 0.25;     // hard cap on |Δ| per zombie per frame
 
   /**
    * @param {number} delta
@@ -174,29 +182,74 @@ export class NPCManager {
       }
     }
 
-    // Pairwise inter-zombie separation. Horizontal-only push (Y untouched)
-    // so it can't trigger jumps or fall through floors. O(N²) but N≤~30 in
-    // practice and the inner body is 5 multiplies + a sqrt — completes in
-    // microseconds for a 20-zombie horde.
+    // Pairwise inter-zombie separation. Two-phase: accumulate per-zombie
+    // pushes into a scratch buffer, then apply with a per-zombie magnitude
+    // cap. Horizontal-only (Y untouched) so it can't trigger jumps or fall
+    // through floors. The cap is the critical safety: with N pairs touching
+    // a single zombie, the raw sum can rocket the zombie ~N×push_factor
+    // units in one frame — past the FREEZE_RANGE in seconds, after which
+    // the zombie just sits invisible-to-physics far from the player.
+    const N = this._zombies.length;
     const MIN = NPCManager.SEPARATION_DIST;
     const MIN_SQ = NPCManager.SEPARATION_DIST_SQ;
-    for (let i = 0; i < this._zombies.length; i++) {
+    const F = NPCManager.SEPARATION_PUSH_FACTOR;
+    const MAX_STEP = NPCManager.SEPARATION_MAX_STEP;
+
+    if (!this._sepDx || this._sepDx.length < N) {
+      this._sepDx = new Float32Array(N * 2);
+      this._sepDz = new Float32Array(N * 2);
+    } else {
+      this._sepDx.fill(0, 0, N);
+      this._sepDz.fill(0, 0, N);
+    }
+
+    for (let i = 0; i < N; i++) {
       const a = this._zombies[i];
-      for (let j = i + 1; j < this._zombies.length; j++) {
+      for (let j = i + 1; j < N; j++) {
         const b = this._zombies[j];
         const dx = a.position.x - b.position.x;
         const dz = a.position.z - b.position.z;
         const dSq = dx * dx + dz * dz;
         if (dSq >= MIN_SQ || dSq < 1e-6) continue;
         const dist = Math.sqrt(dSq);
-        const push = (MIN - dist) * 0.5;
-        const nx = dx / dist;
-        const nz = dz / dist;
-        a.position.x += nx * push; a.position.z += nz * push;
-        a.boundingBox.position.x += nx * push; a.boundingBox.position.z += nz * push;
-        b.position.x -= nx * push; b.position.z -= nz * push;
-        b.boundingBox.position.x -= nx * push; b.boundingBox.position.z -= nz * push;
+        const push = (MIN - dist) * F;
+        const nx = (dx / dist) * push;
+        const nz = (dz / dist) * push;
+        this._sepDx[i] += nx; this._sepDz[i] += nz;
+        this._sepDx[j] -= nx; this._sepDz[j] -= nz;
       }
+    }
+
+    const MAX_SQ = MAX_STEP * MAX_STEP;
+    for (let i = 0; i < N; i++) {
+      let dx = this._sepDx[i];
+      let dz = this._sepDz[i];
+      const magSq = dx * dx + dz * dz;
+      if (magSq < 1e-8) continue;
+      if (magSq > MAX_SQ) {
+        const scale = MAX_STEP / Math.sqrt(magSq);
+        dx *= scale; dz *= scale;
+      }
+      const z = this._zombies[i];
+      z.position.x += dx; z.position.z += dz;
+      z.boundingBox.position.x += dx; z.boundingBox.position.z += dz;
+    }
+
+    // Defensive: a non-finite position (NaN/Inf from anywhere — physics div
+    // by zero, degenerate lookAt) makes the InstancedMesh slot render at NaN
+    // — Three.js silently skips that instance, looking like the zombie
+    // "disappeared". Snap back to the player as a last resort. Cheap O(N)
+    // scan, never fires in normal play.
+    for (let i = 0; i < N; i++) {
+      const z = this._zombies[i];
+      const p = z.position;
+      if (Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)) continue;
+      p.set(player.x, player.y, player.z);
+      z.boundingBox.position.set(player.x, player.y + 16 / 16, player.z);
+      z.physics.fallVel = -1;
+      this._zombieStuckCount[i] = 0;
+      this._zombieWanderFrames[i] = 0;
+      console.warn('[NPCManager] zombie position went non-finite, snapped to player');
     }
 
     // Pig — waypoint patrol
