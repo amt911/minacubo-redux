@@ -68,6 +68,13 @@ export class NPCManager {
   static WANDER_ANGLE = Math.PI / 3;     // 60°
   static WANDER_TARGET_DIST = 5;
 
+  // Distance-based LOD for hordes. Past SHADOW_RANGE we stop casting shadows
+  // (the shadow pass is the single most expensive renderer cost per mesh).
+  // Past FREEZE_RANGE we skip physics + animation entirely — the zombie
+  // freezes in place. Both are squared to avoid sqrt per zombie per frame.
+  static SHADOW_RANGE_SQ = 32 * 32;
+  static FREEZE_RANGE_SQ = 60 * 60;
+
   /**
    * @param {number} delta
    */
@@ -78,6 +85,20 @@ export class NPCManager {
     // All zombies — face, chase (with detour if stuck), and attack the player
     for (let i = 0; i < this._zombies.length; i++) {
       const z = this._zombies[i];
+
+      // Distance-based culling: toggle shadow casting on transition only, and
+      // skip the whole update for zombies past FREEZE_RANGE (out of meaningful
+      // gameplay range, the frozen pose isn't noticeable from that far away).
+      const distSqToPlayer =
+        (z.position.x - player.x) ** 2 + (z.position.z - player.z) ** 2;
+
+      const wantShadow = distSqToPlayer < NPCManager.SHADOW_RANGE_SQ;
+      if (z._castShadow !== wantShadow && z._renderMeshes) {
+        for (const m of z._renderMeshes) m.castShadow = wantShadow;
+        z._castShadow = wantShadow;
+      }
+
+      if (distSqToPlayer > NPCManager.FREEZE_RANGE_SQ) continue;
 
       // Pick body-facing target: real player most of the time, but a rotated
       // detour target when stuck on something. Head always tracks the player
