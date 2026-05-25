@@ -170,6 +170,134 @@ class MyScene extends THREE.Scene {
       getPlayerPosition: () => this.model.position,
       TAM_CHUNK:        this.TAM_CHUNK,
     });
+
+    if (new URLSearchParams(location.search).has('bench')) {
+      this._setupBench();
+    }
+  }
+
+  // ─── Benchmark harness ────────────────────────────────────────────────────
+  // Triggered by `?bench=1`. Lets the scene settle, drives the player forward
+  // for a fixed duration, samples renderer.info + chunk metrics each frame /
+  // every 250ms, then writes a summary to `window.__benchReport` and sets
+  // document.title to `BENCH_DONE` so a CDP-driven runner can read both.
+
+  _setupBench() {
+    const params  = new URLSearchParams(location.search);
+    const SETTLE  = +(params.get('settle')   || 3000);
+    const RECORD  = +(params.get('duration') || 30000);
+
+    this._benchState      = 'settling';
+    this._benchFrameTimes = [];
+    this._benchSamples    = [];
+    this._benchLastFrame  = performance.now();
+    this._benchNextSample = 0;
+
+    setTimeout(() => {
+      this._benchState = 'recording';
+      this._benchLastFrame = performance.now();
+      // Drive forward walk via the input layer's key map (skips pointer-lock
+      // requirement and works headless).
+      this.input.keyMap['W'] = true;
+    }, SETTLE);
+
+    setTimeout(() => {
+      this.input.keyMap['W'] = false;
+      this._benchFinish();
+      this._benchState = 'done';
+    }, SETTLE + RECORD);
+
+    const banner = document.createElement('div');
+    banner.id = 'bench-banner';
+    banner.style.cssText =
+      'position:fixed;top:0;left:50%;transform:translateX(-50%);' +
+      'background:#ff0;color:#000;padding:4px 12px;font:12px monospace;' +
+      'z-index:99999;pointer-events:none';
+    banner.textContent = `BENCH settling ${SETTLE}ms → recording ${RECORD}ms`;
+    document.body.appendChild(banner);
+    this._benchBanner = banner;
+  }
+
+  _benchTick() {
+    if (!this._benchState || this._benchState === 'done') return;
+    const now = performance.now();
+    const dt = now - this._benchLastFrame;
+    this._benchLastFrame = now;
+    if (this._benchState === 'recording') {
+      this._benchFrameTimes.push(dt);
+    }
+    if (now < this._benchNextSample) return;
+    this._benchNextSample = now + 250;
+    if (this._benchState !== 'recording') return;
+
+    const info = this.renderer.info.render;
+    let meshes = 0;
+    let instances = 0;
+    const cms = this.chunkManager.chunkMeshes;
+    for (const xKey in cms) {
+      const col = cms[xKey];
+      for (const zKey in col) {
+        const types = col[zKey];
+        for (const k in types) {
+          meshes++;
+          instances += types[k].count;
+        }
+      }
+    }
+    this._benchSamples.push({
+      calls: info.calls,
+      tris: info.triangles,
+      meshes,
+      instances,
+      queue: this.chunkManager._meshQueue.length,
+      buildAvg: this.chunkManager._buildTimeAvgMs,
+    });
+  }
+
+  _benchFinish() {
+    const ft = this._benchFrameTimes.slice().sort((a, b) => a - b);
+    const n = ft.length;
+    const sum = ft.reduce((a, b) => a + b, 0);
+    const pct = (p) => ft[Math.min(n - 1, Math.max(0, Math.floor(n * p)))];
+    const max = (arr, key) => arr.length ? arr.reduce((m, s) => s[key] > m ? s[key] : m, -Infinity) : 0;
+    const mean = (arr, key) => arr.length ? arr.reduce((a, s) => a + s[key], 0) / arr.length : 0;
+
+    const report = {
+      frames:        n,
+      duration_ms:   +sum.toFixed(1),
+      fps_avg:       +(n / (sum / 1000)).toFixed(2),
+      frame_avg_ms:  +(sum / n).toFixed(3),
+      frame_p50_ms:  +pct(0.50).toFixed(3),
+      frame_p95_ms:  +pct(0.95).toFixed(3),
+      frame_p99_ms:  +pct(0.99).toFixed(3),
+      frame_max_ms:  +ft[n - 1].toFixed(3),
+      max_calls:     max(this._benchSamples, 'calls'),
+      max_tris:      max(this._benchSamples, 'tris'),
+      max_meshes:    max(this._benchSamples, 'meshes'),
+      max_instances: max(this._benchSamples, 'instances'),
+      max_queue:     max(this._benchSamples, 'queue'),
+      build_avg_ms:  +mean(this._benchSamples, 'buildAvg').toFixed(3),
+      DR:            this.DISTANCIA_RENDER,
+      TC:            this.TAM_CHUNK,
+      ua:            navigator.userAgent,
+    };
+
+    /** @type {any} */ (window).__benchReport = report;
+    document.title = 'BENCH_DONE';
+    console.log('BENCH_REPORT', JSON.stringify(report));
+
+    if (this._benchBanner) {
+      this._benchBanner.style.background = '#0f0';
+      this._benchBanner.textContent = 'BENCH done — see console / window.__benchReport';
+    }
+
+    const div = document.createElement('div');
+    div.style.cssText =
+      'position:fixed;top:60px;left:50%;transform:translateX(-50%);' +
+      'background:rgba(0,0,0,0.85);color:#0f0;padding:16px;' +
+      'font:12px/1.4 monospace;z-index:99999;white-space:pre';
+    div.textContent = JSON.stringify(report, null, 2);
+    document.body.appendChild(div);
   }
 
   /** @returns {{x: number, z: number}} */
@@ -303,6 +431,16 @@ class MyScene extends THREE.Scene {
   }
 
   static _loadRenderDistance() {
+    // URL `?DR=N` overrides localStorage so headless bench runs are
+    // reproducible without preseeding localStorage. Range bounded the same
+    // way as the GUI slider (3..32).
+    try {
+      const url = new URLSearchParams(location.search);
+      if (url.has('DR')) {
+        const u = parseInt(url.get('DR') ?? '', 10);
+        if (Number.isFinite(u) && u >= 3 && u <= 32) return u;
+      }
+    } catch { /* location/URLSearchParams may be unavailable */ }
     try {
       const v = parseInt(localStorage.getItem('renderDistance') ?? '9', 10);
       if (Number.isFinite(v) && v >= 3 && v <= 32) return v;
@@ -580,6 +718,7 @@ class MyScene extends THREE.Scene {
   update() {
     if (this.stats) this.stats.update();
     this._updatePerfPanel();
+    this._benchTick();
 
     const delta=this.clock.getDelta();
 
