@@ -143,22 +143,12 @@ export class NPCManager {
       }
 
       const zChunk = identifyChunk(z.position.x, z.position.z, this._TAM_CHUNK);
-      // getCollisionsAround returns a fresh array with ~1000 entries for
-      // 3×3 chunks. Most blocks are far above or below the zombie's 2-unit
-      // height and irrelevant to its physics step. Drop them in-place to
-      // shrink the resolveMovement inner loop — ~80% of blocks filtered out
-      // in typical terrain (a column averages 6-10 blocks tall but the
-      // zombie only intersects 2 of them).
       const blocks = this._chunkManager.getCollisionsAround(zChunk, NPCManager.NPC_PHYSICS_RADIUS);
-      const zy = z.position.y;
-      const yMin = zy - 1.5;
-      const yMax = zy + 3;
-      let w = 0;
-      for (let r = 0; r < blocks.length; r++) {
-        const b = blocks[r];
-        if (b.y >= yMin && b.y <= yMax) blocks[w++] = b;
-      }
-      blocks.length = w;
+      // Note: previously filtered blocks to the zombie's vertical band as a
+      // perf optimisation, but spawn positions where terrain top sits below
+      // the filter range produced 0 blocks → zombie freefell through the
+      // world. Cost of the unfiltered list is small enough not to be worth
+      // the failure mode — keep the full neighbourhood.
 
       // Stuck detection: capture pre-update position, compare post-update.
       const preX = z.position.x;

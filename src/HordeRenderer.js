@@ -106,10 +106,12 @@ export class HordeRenderer {
     const torso   = this._meshes.torso;
     for (let i = 0; i < zs.length; i++) {
       const z = zs[i];
-      // (false) — only re-compose matrices where the dirty flag (set by
-      // Object3D.updateMatrix when position/rotation change) demands it.
-      // (true) was wasting work re-multiplying every parent matrix per zombie.
-      z.updateMatrixWorld(false);
+      // (true) — invisible meshes (we hid the per-zombie body parts) aren't
+      // guaranteed to get their matrixWorld refreshed by the auto-pass in
+      // every Three.js version. Forcing the recurse is cheap (10 nodes per
+      // zombie) and prevents the whole horde from disappearing because
+      // matrixWorld silently stayed identity.
+      z.updateMatrixWorld(true);
       const p = /** @type {any} */ (z)._parts;
       cabeza .setMatrixAt(i, p.cabeza.matrixWorld);
       brazoL .setMatrixAt(i, p.brazoL.matrixWorld);
