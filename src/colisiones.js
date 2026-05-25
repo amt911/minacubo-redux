@@ -80,6 +80,14 @@ class Collisions {
       this.fallVel += this.fallAcc * delta;
       if (result.hitCeiling && this.fallVel > 0) this.fallVel = 0;
     }
+
+    // Autojump: NPCs (zombies, pigs) hop over 1-block obstacles automatically
+    // when their forward movement gets blocked by a wall. Without this the
+    // pathing-less NPCs just grind into the first hill they meet.
+    if (this.autojump && entity.canJump && (result.hitWallX || result.hitWallZ)) {
+      this.fallVel = 10;
+      entity.canJump = false;
+    }
   }
 
   _getHalfExtents(boundingBox) {

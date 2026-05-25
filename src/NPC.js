@@ -1,6 +1,10 @@
 // @ts-check
 import * as THREE from 'three';
 
+// Reusable scratch vector — _stepPhysics runs once per NPC per frame and we
+// don't want a fresh Vector3 alloc per call.
+const _tmpDir = new THREE.Vector3();
+
 /**
  * Base class for all NPCs.
  * Handles physics / collision update; subclasses own mesh construction + animation.
@@ -30,15 +34,25 @@ export class NPC extends THREE.Object3D {
 
   /**
    * Shared movement + collision step.
+   *
+   * Collisions.update treats `moveDir` as a WORLD-space direction and is the
+   * sole authority on the entity's final position (it writes back to
+   * entity.position and boundingBox.position after AABB resolution). Earlier
+   * versions of this method pre-translated the entity AND boundingBox via
+   * translateOnAxis before calling physics, but Collisions then displaced the
+   * boundingBox a second time in world +Z (because we passed local (0,0,1)
+   * as if it were world). On flat ground the bug was invisible (entities
+   * happened to be axis-aligned); after a turn or wall collision, the double
+   * displacement sent NPCs flying or stuck them in place.
+   *
    * @param {Array<{x:number,y:number,z:number,material:string}>} blocks
    * @param {number} delta
    */
   _stepPhysics(blocks, delta) {
     const speed = delta * 4.317;
     this.animacion(true, speed);
-    const dir = new THREE.Vector3(0, 0, 1);
-    this.translateOnAxis(dir.normalize(), speed);
-    this.boundingBox.translateOnAxis(dir, speed);
+    // Local +Z (= the direction the entity faces after lookAt) → world space.
+    const dir = _tmpDir.set(0, 0, 1).applyQuaternion(this.quaternion);
     this.physics.update(blocks, this, this.boundingBox, null, dir, speed);
   }
 }
