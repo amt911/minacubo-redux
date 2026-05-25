@@ -131,14 +131,20 @@ class MyScene extends THREE.Scene {
     );
     this.add(this.pig);
 
-    // Edge fog — hides chunk pop-in well inside the render window.
-    // Starts 2 chunks before the visible edge, fully opaque 0.5 chunks before it.
+    // Edge fog object is always constructed so DayNightCycle can keep its
+    // colour in sync; whether it's actually applied to the scene is
+    // controlled by guiControls.fogEnabled (default off — the Fase-5 perf
+    // work made chunk pop-in fast enough that fog is no longer needed to
+    // mask it). When enabled, fog fades the outer chunk ring; near/far
+    // recompute from current DISTANCIA_RENDER so the band stays the same
+    // proportion of the visible window even after DR changes via GUI.
     const fogNear = this.TAM_CHUNK * (this.DISTANCIA_RENDER / 2 - 2);
     const fogFar  = this.TAM_CHUNK * (this.DISTANCIA_RENDER / 2 - 0.5);
-    this.fog = new THREE.Fog(0x87CEEB, fogNear, fogFar);
+    this._fog = new THREE.Fog(0x87CEEB, fogNear, fogFar);
     this.background = new THREE.Color(0x87CEEB);
+    if (this.guiControls.fogEnabled) this.fog = this._fog;
 
-    this.dayNightCycle = new DayNightCycle(this, this.fog, this.spotLight, this.sunLight);
+    this.dayNightCycle = new DayNightCycle(this, this._fog, this.spotLight, this.sunLight);
 
     this.raycast = new RaycastInteraction({
       camera:            this.camera,
@@ -519,6 +525,12 @@ class MyScene extends THREE.Scene {
       // shadow-pass draw call cost. Must be ≥ ceil(shadowExtent/TC) or the
       // shadow camera's far cubes silently drop out.
       shadowCasterRange: 3,
+      // Edge fog hides chunk pop-in but was only needed when chunks took
+      // visible time to mesh on arrival; with the Fase-5 perf work chunks
+      // come in fast enough that the fog band just obscures terrain the
+      // user would otherwise enjoy seeing. Default off; GUI toggle re-
+      // enables for users who prefer the atmospheric fade.
+      fogEnabled: false,
       // Chunk radius around the player rendered at full detail. Beyond this
       // chunks emit only the topmost block of each column (LOD=FAR) —
       // cliff faces and underground exposure disappear in the distance but
@@ -546,6 +558,7 @@ class MyScene extends THREE.Scene {
       shadowExtent: 32,
       shadowRefreshFrames: 3,
       shadowCasterRange: 3,
+      fogEnabled: false,
       lodNearRadius: 4,
       adaptiveLOD: true,
       cameraSensitivity: 1.0,
@@ -621,6 +634,13 @@ class MyScene extends THREE.Scene {
       // Re-apply castShadow on existing meshes immediately so the slider
       // feels responsive instead of waiting for the 30-frame cull tick.
       .onChange(applyShadowCasterRange);
+
+    graficos.add(this.guiControls, 'fogEnabled')
+      .name('Niebla (edge fog)')
+      .listen()
+      .onChange((v) => {
+        this.fog = v ? this._fog : null;
+      });
 
     graficos.add(this.guiControls, 'lodNearRadius', 1, 16, 1)
       .name('LOD near radius (chunks)')

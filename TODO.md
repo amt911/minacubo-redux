@@ -57,9 +57,11 @@ Romper `MyScene.js` (1105 líneas):
 
 Mejorar la gestión de chunks:
 
-- [ ] Hacer el algoritmo más eficiente.
+- [x] Hacer el algoritmo más eficiente. → Ver Fase 5: per-chunk bounding sphere, bit-packed occupancy, deferred dispose, LOD distant chunks, adaptive LOD, LRU eviction, worker pool dinámico. **build_avg 4.94 → 0.72ms (-85%)**.
 - [x] Hacer que se generen chunks en ejes negativos (ahora mismo no se generan y el personaje se puede caer).
-- [ ] Intentar quitar la niebla, para ello hay que mejorar muchisimo la gestion del juego en general.
+- [x] Intentar quitar la niebla → Fog OFF por defecto + GUI toggle `Niebla (edge fog)`. Con LOD + perf, pop-in mínimo sin niebla.
+
+**Fase 3 cerrada.** Refactor MyScene → módulos completo, gestión chunks eficiente, niebla opcional.
 
 ## Fase 4 — Features juego
 
@@ -78,7 +80,7 @@ Mejorar la gestión de chunks:
 - [ ] Añadir generador de niveles como en minecraft
 - [ ] Añadir fisica de agua.
 
-## Fase 5 — Performance
+## Fase 5 — Performance (cerrada por ahora — todo lo restante son refactors grandes deferidos)
 
 - [x] Frustum culling chunks fuera de cámara
 - [x] Face culling: blocks with all 6 neighbours occupied are skipped (~50-70% drop)
