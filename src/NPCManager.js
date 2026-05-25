@@ -30,6 +30,12 @@ export class NPCManager {
     this._zombies = [opts.zombie];
     /** @type {number[]} per-zombie melee cooldowns */
     this._zombieAttackCooldowns = [0];
+    /** @type {number[]} consecutive frames the zombie moved < expected */
+    this._zombieStuckCount = [0];
+    /** @type {number[]} remaining frames to detour around an obstacle */
+    this._zombieWanderFrames = [0];
+    /** @type {number[]} ±1: which side to detour (set on stuck trigger) */
+    this._zombieWanderSign = [1];
   }
 
   // 3x3 chunks around each NPC is plenty for collision detection.
@@ -48,7 +54,19 @@ export class NPCManager {
   addZombie(zombie) {
     this._zombies.push(zombie);
     this._zombieAttackCooldowns.push(0);
+    this._zombieStuckCount.push(0);
+    this._zombieWanderFrames.push(0);
+    this._zombieWanderSign.push(1);
   }
+
+  // Stuck → wander tuning. Pathing is reactive (no A*): if a zombie hasn't
+  // moved much for STUCK_FRAMES, it rotates its chase heading by ±60° and
+  // commits to that detour for WANDER_FRAMES. Long enough to clear a tree
+  // trunk, short enough that it re-acquires the player promptly.
+  static STUCK_FRAMES = 10;
+  static WANDER_FRAMES = 30;
+  static WANDER_ANGLE = Math.PI / 3;     // 60°
+  static WANDER_TARGET_DIST = 5;
 
   /**
    * @param {number} delta
@@ -57,15 +75,28 @@ export class NPCManager {
     const player = this._getPlayerPos();
     const playerObj = this._getPlayer ? this._getPlayer() : null;
 
-    // All zombies — face, chase, and attack the player
+    // All zombies — face, chase (with detour if stuck), and attack the player
     for (let i = 0; i < this._zombies.length; i++) {
       const z = this._zombies[i];
 
-      z.cabezaW1.lookAt(player.x, player.y, player.z);
-      z.lookAt(player.x, z.position.y, player.z);
-      z.boundingBox.lookAt(player.x, z.boundingBox.position.y, player.z);
+      // Pick body-facing target: real player most of the time, but a rotated
+      // detour target when stuck on something. Head always tracks the player
+      // — only the walking direction detours.
+      let targetX = player.x;
+      let targetZ = player.z;
+      if (this._zombieWanderFrames[i] > 0) {
+        const ang = Math.atan2(player.z - z.position.z, player.x - z.position.x);
+        const newAng = ang + this._zombieWanderSign[i] * NPCManager.WANDER_ANGLE;
+        targetX = z.position.x + Math.cos(newAng) * NPCManager.WANDER_TARGET_DIST;
+        targetZ = z.position.z + Math.sin(newAng) * NPCManager.WANDER_TARGET_DIST;
+        this._zombieWanderFrames[i]--;
+      }
 
-      // Melee attack — skip when player is already dead
+      z.cabezaW1.lookAt(player.x, player.y, player.z);
+      z.lookAt(targetX, z.position.y, targetZ);
+      z.boundingBox.lookAt(targetX, z.boundingBox.position.y, targetZ);
+
+      // Melee attack — uses real player distance, not detour target
       this._zombieAttackCooldowns[i] -= delta;
       if (playerObj && !playerObj.isDead && this._zombieAttackCooldowns[i] <= 0) {
         const dx = z.position.x - player.x;
@@ -79,7 +110,41 @@ export class NPCManager {
 
       const zChunk = identifyChunk(z.position.x, z.position.z, this._TAM_CHUNK);
       const zCols = this._chunkManager.getCollisionsAround(zChunk, NPCManager.NPC_PHYSICS_RADIUS);
-      z.update(zCols, delta);
+
+      // Append other zombies as 1×1×1 soft colliders so the horde doesn't
+      // collapse into a single overlapping pile. blockCentersToAABBs treats
+      // every entry as a unit cube — using boundingBox.position (≈ feet+1)
+      // puts the cube around the zombie's body midline, which is fine for
+      // horizontal separation without interfering with vertical autojump.
+      const blocks = zCols.slice();
+      for (let j = 0; j < this._zombies.length; j++) {
+        if (j === i) continue;
+        const o = this._zombies[j].boundingBox.position;
+        blocks.push({ x: o.x, y: o.y, z: o.z, material: '' });
+      }
+
+      // Stuck detection: capture pre-update position, compare post-update.
+      const preX = z.position.x;
+      const preZ = z.position.z;
+      z.update(blocks, delta);
+
+      // Expected horizontal step ≈ speed = delta * 4.317. We compare squared
+      // distances to skip the sqrt; threshold = 25% of expected² ≈ "moved
+      // less than half a normal step." Wander state also resets stuck count
+      // so we don't immediately re-trigger after coming out of a detour.
+      const movedSq = (z.position.x - preX) ** 2 + (z.position.z - preZ) ** 2;
+      const expected = delta * 4.317;
+      const threshold = expected * expected * 0.25;
+      if (this._zombieWanderFrames[i] === 0 && movedSq < threshold) {
+        this._zombieStuckCount[i]++;
+        if (this._zombieStuckCount[i] >= NPCManager.STUCK_FRAMES) {
+          this._zombieWanderFrames[i] = NPCManager.WANDER_FRAMES;
+          this._zombieWanderSign[i] = Math.random() < 0.5 ? -1 : 1;
+          this._zombieStuckCount[i] = 0;
+        }
+      } else {
+        this._zombieStuckCount[i] = 0;
+      }
     }
 
     // Pig — waypoint patrol
