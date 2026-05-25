@@ -32,8 +32,13 @@ const RUNS      = +(argv.runs     ?? 1);
 const OUT       = argv.out        ?? null;
 const COMPARE   = argv.compare    ?? null;
 const TIMEOUT   = (DURATION + SETTLE + 30000);
-const EXEC_PATH = argv.chromium   ?? '/usr/bin/chromium';
+const EXEC_PATH = argv.chromium   ?? process.env.CHROME_BIN ?? '/usr/bin/chromium';
 const HEADLESS  = argv.show !== 'true';
+// --gpu drops the swiftshader override so the browser uses whatever GL the
+// display provides (xvfb + mesa in CI, the real GPU on a workstation). Keep
+// it OFF by default — headless software GL is the most reproducible setup
+// and any local run without --show wants it.
+const GPU       = argv.gpu === 'true';
 
 function parseArgs(arr) {
   const out = {};
@@ -58,14 +63,14 @@ const browser = await puppeteer.launch({
   args: [
     '--no-sandbox',
     '--disable-setuid-sandbox',
-    // Newer headless mode requires angle/swiftshader pairing — bare
-    // --use-gl=swiftshader fails to create a WebGL context on Chromium ≥130.
-    '--use-angle=swiftshader',
-    '--enable-unsafe-swiftshader',
     '--enable-webgl',
     '--ignore-gpu-blocklist',
     '--disable-dev-shm-usage',
     '--window-size=1600,1000',
+    // Newer headless mode requires angle/swiftshader pairing — bare
+    // --use-gl=swiftshader fails to create a WebGL context on Chromium ≥130.
+    // Omitted in --gpu mode so xvfb's GL is used instead.
+    ...(GPU ? [] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader']),
   ],
   defaultViewport: { width: 1600, height: 1000 },
 });

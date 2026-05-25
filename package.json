@@ -16,6 +16,7 @@
     "compose:prod": "docker compose -f docker-compose.prod.yml up --build",
     "compose:prod:down": "docker compose -f docker-compose.prod.yml down",
     "bench": "node scripts/bench.mjs",
+    "bench:diff": "node scripts/bench-diff.mjs",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --passWithNoTests",
