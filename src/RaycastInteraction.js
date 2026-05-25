@@ -110,12 +110,17 @@ export class RaycastInteraction {
    * @param {boolean} forRemoval
    */
   _nearestHit(raycaster, forRemoval) {
-    // Raycast distance cap is 20 units below — that's < 2 chunks (TAM_CHUNK
-    // = 12). Filter meshes to a 2-chunk radius around the player so we hand
-    // Raycaster a few dozen meshes instead of the full render-distance list.
+    // Raycast distance cap is 20 units — that's < 2 chunks (TAM_CHUNK = 12).
+    // Filter meshes to a 2-chunk radius around the player so we hand
+    // Raycaster a few dozen meshes instead of the full render-distance list,
+    // and set raycaster.far so per-triangle intersection tests short-circuit
+    // beyond 20 units instead of computing the hit and discarding it later.
+    const prevFar = raycaster.far;
+    raycaster.far = 20;
     const p = this._getPlayerPosition();
     const meshes = this._chunkManager.getMeshesNear(p.x, p.z, 2);
     const hits = raycaster.intersectObjects(meshes, false);
+    raycaster.far = prevFar;
     for (const hit of hits) {
       if (hit.distance > 20) break;
       const tipo = hit.object.userData.type;

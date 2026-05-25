@@ -795,12 +795,13 @@ class MyScene extends THREE.Scene {
       this.camera.position.copy(head).addScaledVector(postDir, this._springArmCachedDist);
     }
 
-    // Refresh shadow map every 3 frames — sun + scene move slowly, eye
-    // doesn't notice a 50ms lag in shadow position. Roughly 3x cheaper than
-    // re-rendering the shadow pass every frame.
+    // Refresh shadow map every 6 frames — sun moves at TWEEN speed (full
+    // cycle = 60 s) and the player rarely moves blocks at >10 Hz, so a
+    // 100 ms shadow lag is below perceptual threshold. Roughly 6× cheaper
+    // than re-rendering the shadow pass every frame.
     if (!this._shadowFrame) this._shadowFrame = 0;
     this._shadowFrame++;
-    if (this._shadowFrame % 3 === 0) this.renderer.shadowMap.needsUpdate = true;
+    if (this._shadowFrame % 6 === 0) this.renderer.shadowMap.needsUpdate = true;
 
     // Cull distant shadow casters every 30 frames (~0.5 s). The shadow
     // camera frustum only covers ~3 chunks around the player so meshes
