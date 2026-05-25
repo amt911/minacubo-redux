@@ -8,65 +8,38 @@ import Stats from 'three/addons/libs/stats.module.js'
 // Clases de mi proyecto
 
 import { DayNightCycle } from './DayNightCycle.js'
-import { Esteban } from './Esteban.js'
+import { Player } from './Esteban.js'
 import { Zombie } from './Zombie.js'
-import { Cerdo } from './Cerdo.js'
+import { Pig } from './Cerdo.js'
+import { RaycastInteraction } from './RaycastInteraction.js'
+import { InputHandler } from './InputHandler.js'
+import { ChunkManager } from './ChunkManager.js'
+import { NPCManager } from './NPCManager.js'
 
-import * as cubos from './Cubo.js'
-import * as estructuras from './estructuras.js'
-
+import { BLOCK_TYPES, blockMaterials, blockGeometries } from './BlockRegistry.js'
 import * as PM from './ParametrosMundo.js'
-import { identificarChunk } from './chunkMath.js'
-import { createTerrainNoise, terrainHeight } from './noise.js'
+import { identifyChunk } from './chunkMath.js'
 
 /// La clase fachada del modelo
 /**
  * Usaremos una clase derivada de la clase Scene de Three.js para llelet el control de la escena y de todo lo que ocurre en ella.
  */
 
-function estaColindando(posx, posz, lista){
-//detecta si posx, posy esta colindando con alguno de los elementos de la lista
-  for(let i = 0; i < lista.length; i++){
-    if(Math.abs(posx - lista[i].x) <= 2 && Math.abs(posz - lista[i].z) <= 2){
-      return true;
-    }
-  }  
-  return false;
-}
 
-function estaEnArbol(posx, posz, lista){
-  //detecta si posx, posy esta colindando con alguno de los elementos de la lista
-    for(let i = 0; i < lista.length; i++){
-      if(posx === lista[i].x && posz === lista[i].z){
-        return true;
-      }
-    }  
-    return false;
-  }
 class MyScene extends THREE.Scene {
   constructor(myCanvas) {
     super();
 
     this.clock=new THREE.Clock();
 
-    this.tiempoCerdo = 200;
 
-    //this.fog= new THREE.Fog(0xffffff, 0.1, 100);
     this.movt = "parado";
-    this.mapTeclas = {
-      "W": false,
-      "A": false,
-      "D": false,
-      "S": false,
-      " ": false,
-      "SHIFT": false
-    };
 
     this.myCanvasName = myCanvas;
-    // Lo primero, crear el visualizador, pasándole el lienzo sobre el que realizar los renderizados.
+    // Create renderer, attach to canvas.
     this.renderer = this.createRenderer(myCanvas);
 
-    // Se añade a la gui los controles para manipular los elementos de esta clase
+    // Add GUI controls for this class.
     this.gui = this.createGUI();
 
     this.initStats();
@@ -76,271 +49,272 @@ class MyScene extends THREE.Scene {
     // se llamaba antes, esos valores eran undefined → frustum NaN → shadow
     // map roto silenciosamente.
     this.TAM_CHUNK = 12;
-    this.DISTANCIA_RENDER = 7;
+    this.DISTANCIA_RENDER = MyScene._loadRenderDistance();
 
     // Construimos los distinos elementos que tendremos en la escena
 
-    // Todo elemento que se desee sea tenido en cuenta en el renderizado de la escena debe pertenecer a esta. Bien como hijo de la escena (this en esta clase) o como hijo de un elemento que ya esté en la escena.
-    // Tras crear cada elemento se añadirá a la escena con   this.add(letiable)
+
+
     this.createLights();
 
 
-    // Y unos ejes. Imprescindibles para orientarnos sobre dónde están las cosas
+    // Debug axes.
     this.axis = new THREE.AxesHelper(55);
     this.add(this.axis);
-    this.poscerdo = 0;
 
-    // Por último creamos el modelo.
-    // El modelo puede incluir su parte de la interfaz gráfica de usuario. Le pasamos la referencia a
-    // la gui y el texto bajo el que se agruparán los controles de la interfaz que añada el modelo.
-    this.model = new Esteban(this.gui, "Esteban");
+
+
+
+    this.model = new Player(this.gui, "Player");
     this.createCamera();
     this.setupPointerLock();
 
-    this.habilitarSombrasEnSubarbol(this.model);
+    this.enableShadowsOnSubtree(this.model);
     this.add(this.model);
 
     this.zombie = new Zombie(this.gui, "Zombie");
-    this.habilitarSombrasEnSubarbol(this.zombie);
+    this.enableShadowsOnSubtree(this.zombie);
 
     this.zombie.position.y+=10;
     this.zombie.boundingBox.position.y+=10;
 
-    this.chunkCollision = [];   //Almacena chunks
-    this.chunk = [];
-    const matrix = new THREE.Matrix4();
-    this.noise = createTerrainNoise();
-
-    //this.puntoscerdos = [[]];
-    this.puntoscerdos = [];
-
-    this.model.position.x = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2
-    this.model.position.z = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2
+    this.model.position.x = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2;
+    this.model.position.z = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2;
     this.model.boundingBox.position.x = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2;
     this.model.boundingBox.position.z = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2;
     this.model.boundingBox.position.y = this.model.position.y + 16 / PM.PIXELES_ESTANDAR;
-    this.objeto = 0;
-    this.bloqueSeleccionado = [
-      "Hierba",
-      "Tierra",
-      "Roca",
-      "Piedra",
-      "MaderaRoble",
-      "PiedraBase",
-      "Cristal",
-      "PiedraLuminosa",
-      "HojasRoble"];
+    this.blockTypes = BLOCK_TYPES;
 
-    // Build per-type geometry + material maps so each InstancedMesh uses
-    // the geometry that matches its consolidated groups.
-    const _bloqueInstancias = {
-      "Hierba":        new cubos.Hierba(),
-      "Tierra":        new cubos.Tierra(),
-      "Roca":          new cubos.Roca(),
-      "Piedra":        new cubos.Piedra(),
-      "MaderaRoble":   new cubos.MaderaRoble(),
-      "PiedraBase":    new cubos.PiedraBase(),
-      "Cristal":       new cubos.Cristal(),
-      "PiedraLuminosa":new cubos.PiedraLuminosa(),
-      "HojasRoble":    new cubos.HojaRoble(),
-    };
-    this.materialesText = {};
-    this.geometriaText = {};
-    for (const [tipo, inst] of Object.entries(_bloqueInstancias)) {
-      this.materialesText[tipo] = inst.material;
-      this.geometriaText[tipo]  = inst.geometria;
-    }
+    this.blockMaterials = blockMaterials;
+    this.blockGeometries = blockGeometries;
 
-    this.sizeIMesh = {
-      "Hierba": 5 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER,
-      "Tierra": 5 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER,
-      "Roca": 0,
-      "Piedra": 5 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER,
-      "MaderaRoble": 1 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER,
-      "PiedraBase": 1 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER,
-      "Cristal": 1,
-      "PiedraLuminosa": 1,
-      "HojasRoble": 1 * this.TAM_CHUNK * this.TAM_CHUNK * this.DISTANCIA_RENDER * this.DISTANCIA_RENDER
-    }
+    const seed = Math.floor(Math.random() * 0xffffffff);
+    this.chunkManager = new ChunkManager({
+      TAM_CHUNK:        this.TAM_CHUNK,
+      DISTANCIA_RENDER: this.DISTANCIA_RENDER,
+      seed,
+      blockGeometries:  this.blockGeometries,
+      blockMaterials:   this.blockMaterials,
+      scene:            this,
+    });
 
-    this.mesh = {};
-    for (const tipo of this.bloqueSeleccionado) {
-      this.mesh[tipo] = new THREE.InstancedMesh(
-        this.geometriaText[tipo],
-        this.materialesText[tipo],
-        this.sizeIMesh[tipo]
-      );
-    }
+    const { zombieSpawn, pigWaypoints } = this.chunkManager.init();
 
-    let k = 0;
+    // Expose chunk data via proxy so existing code keeps working
+    this.chunk       = this.chunkManager.chunk;
+    this.chunkMinMax = this.chunkManager.chunkMinMax;
 
-    let contador = 0;
-    let contador2 = 0;
-    let contador3 = 0;
-    let contador4 = 0;
-    let zombiex = 0;
-    let zombiey = 0;
-    let zombiez = 0;  
-    for (let i = 0; i < this.DISTANCIA_RENDER; i++) {   //PLANO XZ DE CHUNKS
-      for (let j = 0; j < this.DISTANCIA_RENDER; j++) {
-        const bloques = [];
-        var n_arboles = Math.floor(Math.random() * this.TAM_CHUNK/5)+1;
-        var n_puntoscerdo = Math.floor(Math.random() * this.TAM_CHUNK/4)+2;
-        var list_arboles = [];
-
-        for (let m = 0; m < n_arboles; m++) {
-          let posx =  Math.floor(Math.random()* this.TAM_CHUNK);
-          let posz = Math.floor(Math.random() * this.TAM_CHUNK);
-          while(estaColindando(posx,posz,list_arboles)){
-           posx =  Math.floor(Math.random()* this.TAM_CHUNK);
-           posz = Math.floor(Math.random() * this.TAM_CHUNK);
-          }
-          list_arboles.push({ x: posx, y: 10, z: posz });
-        }
-
-        if(i === 0 && j === 0){
-          zombiex = Math.floor(Math.random() * this.TAM_CHUNK);
-          zombiez = Math.floor(Math.random()* this.TAM_CHUNK);
-          //Añadir n coordenadas x,y,z random a puntoscerdos
-          for(let m = 0; m < n_puntoscerdo; m++){
-            let posx =  Math.floor(Math.random()* this.TAM_CHUNK);
-            let posz = Math.floor(Math.random() * this.TAM_CHUNK);
-            while(estaEnArbol(posx,posz,list_arboles)){
-             posx =  Math.floor(Math.random()* this.TAM_CHUNK);
-             posz = Math.floor(Math.random() * this.TAM_CHUNK);
-            }
-            this.puntoscerdos.push({ x: posx, y: 10, z: posz });
-          }        
-  
-        }
-
-
-        for (let x = i * this.TAM_CHUNK; x < (i * this.TAM_CHUNK) + this.TAM_CHUNK; x++) {   //PARA GENERAR LOS BLOQUES DE UN CHUNK
-          for (let z = j * this.TAM_CHUNK; z < (j * this.TAM_CHUNK) + this.TAM_CHUNK; z++) {
-            const v = terrainHeight(this.noise, x, z);
-            if(i === 0 && j === 0){
-              if(zombiex + i*this.TAM_CHUNK === x && zombiez + j*this.TAM_CHUNK === z){
-                zombiey = v;
-              }
-              }
-            matrix.setPosition(x * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR, z * 16 / PM.PIXELES_ESTANDAR);
-            this.mesh["Hierba"].setMatrixAt(k, matrix);
-
-
-            bloques.push({ x: x * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR, z: z * 16 / PM.PIXELES_ESTANDAR, material: "Hierba" });
-            k++;
-            for (let indice_arbol = 0; indice_arbol < list_arboles.length; indice_arbol++) {
-              if (list_arboles[indice_arbol].x + i * this.TAM_CHUNK === x && list_arboles[indice_arbol].z + j * this.TAM_CHUNK === z) {
-                list_arboles[indice_arbol].y = v + 0.5;
-                list_arboles[indice_arbol].x = list_arboles[indice_arbol].x + i * this.TAM_CHUNK;
-                list_arboles[indice_arbol].z = list_arboles[indice_arbol].z + j * this.TAM_CHUNK;
-              }
-            }
-            //si algun punto de puntoscerdo coincide con x y z, entonces asigno v a y
-            for (let indice_puntoscerdo = 0; indice_puntoscerdo < this.puntoscerdos.length; indice_puntoscerdo++) {
-              if (this.puntoscerdos[indice_puntoscerdo].x + i * this.TAM_CHUNK === x && this.puntoscerdos[indice_puntoscerdo].z + j * this.TAM_CHUNK === z) {
-                this.puntoscerdos[indice_puntoscerdo].y = v;
-                this.puntoscerdos[indice_puntoscerdo].x = this.puntoscerdos[indice_puntoscerdo].x + i * this.TAM_CHUNK;
-                this.puntoscerdos[indice_puntoscerdo].z = this.puntoscerdos[indice_puntoscerdo].z + j * this.TAM_CHUNK;
-              }
-            }
-
-            for (let s = 0; s < 3; s++) {
-              matrix.setPosition(x * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR - s - 1, z * 16 / PM.PIXELES_ESTANDAR);
-              this.mesh["Tierra"].setMatrixAt(contador, matrix);
-
-
-              bloques.push({ x: x * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR - s - 1, z: z * 16 / PM.PIXELES_ESTANDAR, material: "Tierra" });
-              contador++;
-            }
-            /* */
-            for (let r = 3; r < 8; r++) {
-              matrix.setPosition(x * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR - r - 1, z * 16 / PM.PIXELES_ESTANDAR);
-              this.mesh["Piedra"].setMatrixAt(contador2, matrix);
-
-
-              bloques.push({ x: x * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR - r - 1, z: z * 16 / PM.PIXELES_ESTANDAR, material: "Piedra" });
-              contador2++;
-            }
-          }
-        }
-        for (let indice_arbol = 0; indice_arbol < list_arboles.length; indice_arbol++) {
-          const arbol = new estructuras.ArbolRoble();
-
-          for (let r = 0; r < arbol.bloqueshojas.length; r++) {
-            matrix.setPosition(list_arboles[indice_arbol].x + arbol.bloqueshojas[r].x, list_arboles[indice_arbol].y + arbol.bloqueshojas[r].y - 0.5, list_arboles[indice_arbol].z + arbol.bloqueshojas[r].z);
-            this.mesh["HojasRoble"].setMatrixAt(contador3, matrix);
-            bloques.push({ x: list_arboles[indice_arbol].x + arbol.bloqueshojas[r].x, y: list_arboles[indice_arbol].y + arbol.bloqueshojas[r].y -0.5, z: list_arboles[indice_arbol].z  + arbol.bloqueshojas[r].z, material: "HojasRoble" });
-            contador3++;
-          }
-
-          for (let r = 0; r < arbol.bloquesmadera.length; r++) {
-            matrix.setPosition(list_arboles[indice_arbol].x + arbol.bloquesmadera[r].x, list_arboles[indice_arbol].y + arbol.bloquesmadera[r].y -0.5, list_arboles[indice_arbol].z + arbol.bloquesmadera[r].z);
-            this.mesh["MaderaRoble"].setMatrixAt(contador4, matrix);
-            bloques.push({ x: list_arboles[indice_arbol].x + arbol.bloquesmadera[r].x, y: list_arboles[indice_arbol].y + arbol.bloquesmadera[r].y -0.5, z: list_arboles[indice_arbol].z + arbol.bloquesmadera[r].z, material: "MaderaRoble" });
-            contador4++;
-          }
-        }
-        this.chunkCollision.push(bloques);
-        const chunkIndex = this.identificarChunk(bloques[0].x, bloques[0].z);
-
-        if (this.chunk[chunkIndex.x] === undefined)
-          this.chunk[chunkIndex.x] = [];
-
-        this.chunk[chunkIndex.x][chunkIndex.z] = bloques;
-      }
-    }
-
-    this.mesh["Hierba"].count = k;
-    this.mesh["Tierra"].count = contador;
-    this.mesh["Piedra"].count = contador2;
-    this.mesh["HojasRoble"].count = contador3;
-    this.mesh["MaderaRoble"].count = contador4;
-
-    for (const aux in this.mesh) {
-      this.aplicarSombrasInstancedMesh(this.mesh[aux]);
-      this.add(this.mesh[aux]);
-    }
-
-    this.chunkMinMax = {
-      min: { x: 0, z: 0 },
-      max: { x: this.DISTANCIA_RENDER - 1, z: this.DISTANCIA_RENDER - 1 }
-    };
-
-    this.zombie.position.set(this.zombie.position.x+zombiex, this.zombie.position.y+zombiey+0.1, this.zombie.position.z+zombiez);
-    this.zombie.boundingBox.position.set(this.zombie.boundingBox.position.x+zombiex, this.zombie.boundingBox.position.y+zombiey+0.1, this.zombie.boundingBox.position.z+zombiez);    
+    this.zombie.position.set(
+      this.zombie.position.x + zombieSpawn.x,
+      this.zombie.position.y + zombieSpawn.y + 0.1,
+      this.zombie.position.z + zombieSpawn.z
+    );
+    this.zombie.boundingBox.position.set(
+      this.zombie.boundingBox.position.x + zombieSpawn.x,
+      this.zombie.boundingBox.position.y + zombieSpawn.y + 0.1,
+      this.zombie.boundingBox.position.z + zombieSpawn.z
+    );
     this.add(this.zombie);
 
+    this.pig = new Pig(this.gui, "Cerdo");
+    this.enableShadowsOnSubtree(this.pig);
+    const pig0 = pigWaypoints[0];
+    this.pig.position.set(
+      this.pig.position.x + pig0.x,
+      this.pig.position.y + pig0.y + 0.1,
+      this.pig.position.z + pig0.z
+    );
+    this.pig.boundingBox.position.set(
+      this.pig.boundingBox.position.x + pig0.x,
+      this.pig.boundingBox.position.y + pig0.y + 0.1,
+      this.pig.boundingBox.position.z + pig0.z
+    );
+    this.add(this.pig);
 
-    //Creacion del cerdo
-    this.cerdo = new Cerdo(this.gui, "Cerdo");
-    this.habilitarSombrasEnSubarbol(this.cerdo);
-    this.cerdo.position.set(this.cerdo.position.x+this.puntoscerdos[0].x, this.cerdo.position.y + this.puntoscerdos[0].y+0.1, this.cerdo.position.z + this.puntoscerdos[0].z);
-    this.cerdo.boundingBox.position.set(this.cerdo.boundingBox.position.x+this.puntoscerdos[0].x,this.cerdo.boundingBox.position.y+ this.puntoscerdos[0].y+0.1, this.cerdo.boundingBox.position.z + this.puntoscerdos[0].z);
-    this.add(this.cerdo);
+    // Edge fog object is always constructed so DayNightCycle can keep its
+    // colour in sync; whether it's actually applied to the scene is
+    // controlled by guiControls.fogEnabled (default off — the Fase-5 perf
+    // work made chunk pop-in fast enough that fog is no longer needed to
+    // mask it). When enabled, fog fades the outer chunk ring; near/far
+    // recompute from current DISTANCIA_RENDER so the band stays the same
+    // proportion of the visible window even after DR changes via GUI.
+    const fogNear = this.TAM_CHUNK * (this.DISTANCIA_RENDER / 2 - 2);
+    const fogFar  = this.TAM_CHUNK * (this.DISTANCIA_RENDER / 2 - 0.5);
+    this._fog = new THREE.Fog(0x87CEEB, fogNear, fogFar);
+    this.background = new THREE.Color(0x87CEEB);
+    if (this.guiControls.fogEnabled) this.fog = this._fog;
 
-    //Creacion del feedback
-    const cajaSeleccionada = new THREE.BoxGeometry(1, 1, 1);
-    this.cajaSeleccionada = new THREE.Mesh(cajaSeleccionada);
+    this.dayNightCycle = new DayNightCycle(this, this._fog, this.spotLight, this.sunLight);
 
-    this.add(this.cajaSeleccionada);
+    this.raycast = new RaycastInteraction({
+      camera:            this.camera,
+      chunkManager:      this.chunkManager,
+      blockTypes:        this.blockTypes,
+      getObjeto:         () => this.objeto,
+      scene:             this,
+      TAM_CHUNK:         this.TAM_CHUNK,
+      getPlayerPosition: () => this.model.position,
+    });
 
-    const cajaMat = /** @type {THREE.MeshBasicMaterial} */ (this.cajaSeleccionada.material);
-    cajaMat.wireframe = true;
-    cajaMat.wireframeLinewidth = 3;
-    cajaMat.color.set(0x333333);
-    this.cajaSeleccionada.visible = false;
+    this.input = new InputHandler({
+      onPlayerReset: () => this.model.resetPosicion(),
+      onMouseDown:   (e) => this.onDocumentMouseDown(e),
+      onMouseUp:     (e) => this.onDocumentMouseUp(e),
+    });
+    // Expose keyMap alias for update() callers
+    Object.defineProperty(this, 'mapTeclas', { get: () => this.input.keyMap });
+    Object.defineProperty(this, 'objeto', {
+      get: () => this.input.selectedBlockIndex,
+      set: (v) => { this.input.selectedBlockIndex = v; },
+    });
 
-    //Creacion del fog, el cielo y su animacion
-    this.fog= new THREE.Fog(0x87CEEB, this.TAM_CHUNK*(this.DISTANCIA_RENDER/2)-4, this.TAM_CHUNK*(this.DISTANCIA_RENDER/2));
-    this.background= new THREE.Color(0x87CEEB);
+    this.npcManager = new NPCManager({
+      zombie:           this.zombie,
+      pig:            this.pig,
+      pigWaypoints:     pigWaypoints,
+      chunkManager:     this.chunkManager,
+      getPlayerPosition: () => this.model.position,
+      TAM_CHUNK:        this.TAM_CHUNK,
+    });
 
-    this.dayNightCycle = new DayNightCycle(this, this.fog, this.spotLight, this.sunLight);
+    if (new URLSearchParams(location.search).has('bench')) {
+      this._setupBench();
+    }
+  }
+
+  // ─── Benchmark harness ────────────────────────────────────────────────────
+  // Triggered by `?bench=1`. Lets the scene settle, drives the player forward
+  // for a fixed duration, samples renderer.info + chunk metrics each frame /
+  // every 250ms, then writes a summary to `window.__benchReport` and sets
+  // document.title to `BENCH_DONE` so a CDP-driven runner can read both.
+
+  _setupBench() {
+    const params  = new URLSearchParams(location.search);
+    const SETTLE  = +(params.get('settle')   || 3000);
+    const RECORD  = +(params.get('duration') || 30000);
+
+    // Adaptive LOD would react to the artificially low bench framerate by
+    // shrinking lodNearRadius mid-run; the resulting transition rebuilds
+    // skew the measurement away from steady-state perf. Turn it off for
+    // the duration of the bench so reports stay reproducible.
+    this.guiControls.adaptiveLOD = false;
+
+    this._benchState      = 'settling';
+    this._benchFrameTimes = [];
+    this._benchSamples    = [];
+    this._benchLastFrame  = performance.now();
+    this._benchNextSample = 0;
+
+    setTimeout(() => {
+      this._benchState = 'recording';
+      this._benchLastFrame = performance.now();
+      // Drive forward walk via the input layer's key map (skips pointer-lock
+      // requirement and works headless).
+      this.input.keyMap['W'] = true;
+    }, SETTLE);
+
+    setTimeout(() => {
+      this.input.keyMap['W'] = false;
+      this._benchFinish();
+      this._benchState = 'done';
+    }, SETTLE + RECORD);
+
+    const banner = document.createElement('div');
+    banner.id = 'bench-banner';
+    banner.style.cssText =
+      'position:fixed;top:0;left:50%;transform:translateX(-50%);' +
+      'background:#ff0;color:#000;padding:4px 12px;font:12px monospace;' +
+      'z-index:99999;pointer-events:none';
+    banner.textContent = `BENCH settling ${SETTLE}ms → recording ${RECORD}ms`;
+    document.body.appendChild(banner);
+    this._benchBanner = banner;
+  }
+
+  _benchTick() {
+    if (!this._benchState || this._benchState === 'done') return;
+    const now = performance.now();
+    const dt = now - this._benchLastFrame;
+    this._benchLastFrame = now;
+    if (this._benchState === 'recording') {
+      this._benchFrameTimes.push(dt);
+    }
+    if (now < this._benchNextSample) return;
+    this._benchNextSample = now + 250;
+    if (this._benchState !== 'recording') return;
+
+    const info = this.renderer.info.render;
+    let meshes = 0;
+    let instances = 0;
+    const cms = this.chunkManager.chunkMeshes;
+    for (const xKey in cms) {
+      const col = cms[xKey];
+      for (const zKey in col) {
+        const types = col[zKey];
+        for (const k in types) {
+          meshes++;
+          instances += types[k].count;
+        }
+      }
+    }
+    this._benchSamples.push({
+      calls: info.calls,
+      tris: info.triangles,
+      meshes,
+      instances,
+      queue: this.chunkManager._meshQueue.length,
+      buildAvg: this.chunkManager._buildTimeAvgMs,
+    });
+  }
+
+  _benchFinish() {
+    const ft = this._benchFrameTimes.slice().sort((a, b) => a - b);
+    const n = ft.length;
+    const sum = ft.reduce((a, b) => a + b, 0);
+    const pct = (p) => ft[Math.min(n - 1, Math.max(0, Math.floor(n * p)))];
+    const max = (arr, key) => arr.length ? arr.reduce((m, s) => s[key] > m ? s[key] : m, -Infinity) : 0;
+    const mean = (arr, key) => arr.length ? arr.reduce((a, s) => a + s[key], 0) / arr.length : 0;
+
+    const report = {
+      frames:        n,
+      duration_ms:   +sum.toFixed(1),
+      fps_avg:       +(n / (sum / 1000)).toFixed(2),
+      frame_avg_ms:  +(sum / n).toFixed(3),
+      frame_p50_ms:  +pct(0.50).toFixed(3),
+      frame_p95_ms:  +pct(0.95).toFixed(3),
+      frame_p99_ms:  +pct(0.99).toFixed(3),
+      frame_max_ms:  +ft[n - 1].toFixed(3),
+      max_calls:     max(this._benchSamples, 'calls'),
+      max_tris:      max(this._benchSamples, 'tris'),
+      max_meshes:    max(this._benchSamples, 'meshes'),
+      max_instances: max(this._benchSamples, 'instances'),
+      max_queue:     max(this._benchSamples, 'queue'),
+      build_avg_ms:  +mean(this._benchSamples, 'buildAvg').toFixed(3),
+      DR:            this.DISTANCIA_RENDER,
+      TC:            this.TAM_CHUNK,
+      ua:            navigator.userAgent,
+    };
+
+    /** @type {any} */ (window).__benchReport = report;
+    document.title = 'BENCH_DONE';
+    console.log('BENCH_REPORT', JSON.stringify(report));
+
+    if (this._benchBanner) {
+      this._benchBanner.style.background = '#0f0';
+      this._benchBanner.textContent = 'BENCH done — see console / window.__benchReport';
+    }
+
+    const div = document.createElement('div');
+    div.style.cssText =
+      'position:fixed;top:60px;left:50%;transform:translateX(-50%);' +
+      'background:rgba(0,0,0,0.85);color:#0f0;padding:16px;' +
+      'font:12px/1.4 monospace;z-index:99999;white-space:pre';
+    div.textContent = JSON.stringify(report, null, 2);
+    document.body.appendChild(div);
   }
 
   /** @returns {{x: number, z: number}} */
-  identificarChunk(x, z) {
-    return identificarChunk(x, z, this.TAM_CHUNK);
+  identifyChunk(x, z) {
+    return identifyChunk(x, z, this.TAM_CHUNK);
   }
 
 
@@ -358,11 +332,110 @@ class MyScene extends THREE.Scene {
     document.querySelector('#Stats-output').appendChild(stats.domElement);
 
     this.stats = stats;
+
+    // Perf overlay: draw calls, triangles, chunk mesh count, instance count,
+    // average chunk-build time. Sits below Stats. Update throttled to 2 Hz
+    // by _updatePerfPanel() so the DOM write doesn't compete for the frame.
+    const panel = document.createElement('div');
+    panel.style.cssText =
+      'position:absolute;top:50px;left:0;background:rgba(0,0,0,0.6);' +
+      'color:#0f0;font:11px/1.35 monospace;padding:4px 8px;' +
+      'pointer-events:none;z-index:9999;white-space:pre;min-width:140px';
+    panel.textContent = 'perf …';
+    document.body.appendChild(panel);
+    this._perfPanel = panel;
+    this._perfNextMs = 0;
+  }
+
+  _updatePerfPanel() {
+    const now = performance.now();
+    if (now < this._perfNextMs) return;
+    this._perfNextMs = now + 500;
+
+    const info = this.renderer.info.render;
+
+    let meshes = 0;
+    let instances = 0;
+    const cms = this.chunkManager.chunkMeshes;
+    for (const xKey in cms) {
+      const col = cms[xKey];
+      for (const zKey in col) {
+        const types = col[zKey];
+        for (const k in types) {
+          meshes++;
+          instances += types[k].count;
+        }
+      }
+    }
+
+    const chunkCount = this.chunkManager.chunkCount;
+    const queueLen = this.chunkManager._meshQueue.length;
+    const pendingGens = this.chunkManager._pendingGens.size;
+    const buildAvg = this.chunkManager._buildTimeAvgMs;
+    const lodR = this.chunkManager.lodNearRadius;
+    const adapt = this.guiControls.adaptiveLOD ? 'on' : 'off';
+
+    this._perfPanel.textContent =
+      `calls     ${info.calls}\n` +
+      `tris      ${info.triangles.toLocaleString()}\n` +
+      `meshes    ${meshes}\n` +
+      `instances ${instances.toLocaleString()}\n` +
+      `chunks    ${chunkCount}\n` +
+      `queue     ${queueLen}\n` +
+      `pending   ${pendingGens}\n` +
+      `build avg ${buildAvg.toFixed(2)}ms\n` +
+      `LOD near  ${lodR} (adapt ${adapt})`;
+  }
+
+  /**
+   * Tune chunkManager.lodNearRadius up/down to keep avg FPS in a target band.
+   * Tracks the last ~1 s of frame times; every 60 frames (~1 s at 60 FPS),
+   * if the bench is below 30 FPS shrinks the radius (more chunks fall to
+   * FAR LOD → cheaper); above 55 FPS grows it. Each adjustment is followed
+   * by a 3-second cooldown so we don't chase noise.
+   *
+   * @param {number} dt seconds since last frame
+   */
+  _tickAdaptiveLOD(dt) {
+    if (!this._fpsWindow) this._fpsWindow = [];
+    this._fpsWindow.push(dt * 1000);
+    if (this._fpsWindow.length > 60) this._fpsWindow.shift();
+
+    if (!this._adaptiveCdMs) this._adaptiveCdMs = 0;
+    this._adaptiveCdMs -= dt * 1000;
+
+    if (!this.guiControls.adaptiveLOD) return;
+    if (this._fpsWindow.length < 60) return;
+    if (this._adaptiveCdMs > 0) return;
+
+    let sum = 0;
+    for (let i = 0; i < this._fpsWindow.length; i++) sum += this._fpsWindow[i];
+    const avgFps = 1000 / (sum / this._fpsWindow.length);
+
+    const cur = this.guiControls.lodNearRadius;
+    const maxLOD = Math.max(2, Math.floor(this.DISTANCIA_RENDER / 2));
+    let next = cur;
+    if (avgFps < 30 && cur > 1) next = cur - 1;
+    else if (avgFps > 55 && cur < maxLOD) next = cur + 1;
+    if (next === cur) return;
+
+    this.guiControls.lodNearRadius = next;
+    this.chunkManager.lodNearRadius = next;
+    const pc = identifyChunk(this.model.position.x, this.model.position.z, this.TAM_CHUNK);
+    this.chunkManager._playerChunk.x = pc.x + 1; // force diff
+    this.chunkManager.setPlayerChunk(pc.x, pc.z);
+    this._adaptiveCdMs = 3000;
   }
 
   createCamera() {
     this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
     this.camera.position.set(this.model.position.x, this.model.position.y + 10, this.model.position.z - 10);
+
+    // Initial spherical camera angles — used by pointer-lock AND arrow-key
+    // camera control. Pre-set so arrow keys work before the player touches
+    // the mouse.
+    this._camPhi = Math.PI * 0.3;
+    this._camTheta = Math.PI;
 
     // Pre-allocated vectors reused every frame — eliminate per-frame GC pressure.
     this.vector = new THREE.Vector3();
@@ -412,6 +485,24 @@ class MyScene extends THREE.Scene {
     this.model.addCamara(this.cameraControl);
   }
 
+  static _loadRenderDistance() {
+    // URL `?DR=N` overrides localStorage so headless bench runs are
+    // reproducible without preseeding localStorage. Range bounded the same
+    // way as the GUI slider (3..32).
+    try {
+      const url = new URLSearchParams(location.search);
+      if (url.has('DR')) {
+        const u = parseInt(url.get('DR') ?? '', 10);
+        if (Number.isFinite(u) && u >= 3 && u <= 64) return u;
+      }
+    } catch { /* location/URLSearchParams may be unavailable */ }
+    try {
+      const v = parseInt(localStorage.getItem('renderDistance') ?? '9', 10);
+      if (Number.isFinite(v) && v >= 3 && v <= 64) return v;
+    } catch { /* localStorage may be unavailable */ }
+    return 9;
+  }
+
   createGUI() {
     const gui = new GUI();
 
@@ -420,44 +511,192 @@ class MyScene extends THREE.Scene {
       activarWireframe: true,
       shadowsEnabled: true,
       shadowResolution: 1024,
+      // Half-extent of the sun's ortho shadow camera frustum (world units).
+      // Bigger = shadows reach further but each shadow-map texel covers more
+      // world area (softer edges). 32 ≈ 2.6 chunks on each side at TC=12.
+      shadowExtent: 32,
+      // Sun shadow map re-rendered every N frames. 1 = sharpest follow of
+      // moving sun + edited blocks, but pays full shadow pass every frame.
+      // 6 ≈ 100 ms lag at 60 FPS — invisible to the eye on a slow-moving sun
+      // but introduces snap on block edits. 3 is the sweet spot.
+      shadowRefreshFrames: 3,
+      // Chunk-radius around the player whose meshes keep castShadow=true.
+      // 0 = only player chunk; bigger = more chunks contribute, at higher
+      // shadow-pass draw call cost. Must be ≥ ceil(shadowExtent/TC) or the
+      // shadow camera's far cubes silently drop out.
+      shadowCasterRange: 3,
+      // Edge fog hides chunk pop-in but was only needed when chunks took
+      // visible time to mesh on arrival; with the Fase-5 perf work chunks
+      // come in fast enough that the fog band just obscures terrain the
+      // user would otherwise enjoy seeing. Default off; GUI toggle re-
+      // enables for users who prefer the atmospheric fade.
+      fogEnabled: false,
+      // Chunk radius around the player rendered at full detail. Beyond this
+      // chunks emit only the topmost block of each column (LOD=FAR) —
+      // cliff faces and underground exposure disappear in the distance but
+      // instance count drops sharply. Smaller = cheaper, less detail.
+      lodNearRadius: 4,
+      // When on, the LOD near radius auto-adjusts to keep frame rate in a
+      // target band: shrinks (more chunks at FAR LOD → cheaper) when avg
+      // FPS drops below 30, grows when avg FPS is above 55. Adjustments
+      // are cooled down (3 s between changes) to avoid oscillation.
+      adaptiveLOD: true,
       cameraSensitivity: 1.0,
+      renderDistance: MyScene._loadRenderDistance(),
     }
+
+    // Hard-coded factory defaults — used by Graphics > [ Reset ] button.
+    // Excludes `renderDistance` because changing it triggers location.reload()
+    // (jarring on a click meant to just restore visual defaults) — DR reset
+    // is opt-in via the slider.
+    /** @type {Record<string, any>} */
+    this._guiDefaults = {
+      axisOnOff: true,
+      activarWireframe: true,
+      shadowsEnabled: true,
+      shadowResolution: 1024,
+      shadowExtent: 32,
+      shadowRefreshFrames: 3,
+      shadowCasterRange: 3,
+      fogEnabled: false,
+      lodNearRadius: 4,
+      adaptiveLOD: true,
+      cameraSensitivity: 1.0,
+    };
 
     const folder = gui.addFolder('Ayudas');
 
     folder.add(this.guiControls, 'axisOnOff')
       .name('Mostrar ejes : ')
+      .listen()
       .onChange((value) => this.setAxisVisible(value));
 
     folder.add(this.guiControls, 'activarWireframe')
-      .name('Mostrar feedback (raycast a 10Hz)');
+      .name('Mostrar feedback (raycast a 10Hz)')
+      .listen();
 
-    const graficos = gui.addFolder('Gráficos');
+    const graficos = gui.addFolder('Graphics');
+
+    // Side-effect helpers: factored out so the [ Reset ] button can re-apply
+    // each setting without duplicating the onChange bodies.
+    const applyShadowsEnabled = (v) => {
+      this.renderer.shadowMap.enabled = v;
+      this.sunLight.castShadow = v;
+      if (this.sunLight.shadow.map) {
+        this.sunLight.shadow.map.dispose();
+        this.sunLight.shadow.map = null;
+      }
+      this.renderer.shadowMap.needsUpdate = true;
+    };
+    const applyShadowResolution = (v) => {
+      this.sunLight.shadow.mapSize.set(v, v);
+      if (this.sunLight.shadow.map) {
+        this.sunLight.shadow.map.dispose();
+        this.sunLight.shadow.map = null;
+      }
+    };
+    const applyShadowExtent = (v) => {
+      const cam = this.sunLight.shadow.camera;
+      cam.left = -v; cam.right = v; cam.top = v; cam.bottom = -v;
+      cam.updateProjectionMatrix();
+      this.renderer.shadowMap.needsUpdate = true;
+    };
+    const applyShadowCasterRange = () => {
+      this.chunkManager.updateShadowCastersByDistance(
+        this.model.position.x,
+        this.model.position.z,
+        this.guiControls.shadowCasterRange,
+      );
+    };
 
     graficos.add(this.guiControls, 'shadowsEnabled')
       .name('Sombras')
+      .listen()
+      .onChange(applyShadowsEnabled);
+
+    graficos.add(this.guiControls, 'shadowResolution', { '512': 512, '1024': 1024, '2048': 2048, '4096': 4096 })
+      .name('Shadow resolution')
+      .listen()
+      .onChange(applyShadowResolution);
+
+    graficos.add(this.guiControls, 'shadowExtent', 8, 96, 1)
+      .name('Shadow extent (units)')
+      .listen()
+      .onChange(applyShadowExtent);
+
+    graficos.add(this.guiControls, 'shadowRefreshFrames', 1, 10, 1)
+      .name('Shadow refresh frames')
+      .listen();
+
+    graficos.add(this.guiControls, 'shadowCasterRange', 0, 8, 1)
+      .name('Shadow caster radius (chunks)')
+      .listen()
+      // Re-apply castShadow on existing meshes immediately so the slider
+      // feels responsive instead of waiting for the 30-frame cull tick.
+      .onChange(applyShadowCasterRange);
+
+    graficos.add(this.guiControls, 'fogEnabled')
+      .name('Niebla (edge fog)')
+      .listen()
       .onChange((v) => {
-        this.renderer.shadowMap.enabled = v;
-        this.sunLight.castShadow = v;
-        if (this.sunLight.shadow.map) {
-          this.sunLight.shadow.map.dispose();
-          this.sunLight.shadow.map = null;
-        }
-        this.renderer.shadowMap.needsUpdate = true;
+        this.fog = v ? this._fog : null;
       });
 
-    graficos.add(this.guiControls, 'shadowResolution', { '512': 512, '1024': 1024, '2048': 2048 })
-      .name('Resolución sombras')
+    graficos.add(this.guiControls, 'lodNearRadius', 1, 16, 1)
+      .name('LOD near radius (chunks)')
+      .listen()
       .onChange((v) => {
-        this.sunLight.shadow.mapSize.set(v, v);
-        if (this.sunLight.shadow.map) {
-          this.sunLight.shadow.map.dispose();
-          this.sunLight.shadow.map = null;
-        }
+        this.chunkManager.lodNearRadius = v;
+        // Re-evaluate every meshed chunk against the new radius and queue
+        // rebuilds for any that crossed the bracket. setPlayerChunk does
+        // the scan; force it by faking a chunk change.
+        const pc = identifyChunk(this.model.position.x, this.model.position.z, this.TAM_CHUNK);
+        this.chunkManager._playerChunk.x = pc.x + 1; // force diff
+        this.chunkManager.setPlayerChunk(pc.x, pc.z);
       });
+
+    graficos.add(this.guiControls, 'adaptiveLOD')
+      .name('Adaptive LOD (auto-tune)')
+      .listen();
 
     graficos.add(this.guiControls, 'cameraSensitivity', 0.1, 3.0, 0.05)
-      .name('Sensibilidad cámara');
+      .name('Camera sensitivity')
+      .listen();
+
+    graficos.add(this.guiControls, 'renderDistance', 3, 64, 1)
+      .name('Render distance (reloads)')
+      .onFinishChange((v) => {
+        try { localStorage.setItem('renderDistance', String(v)); } catch { /* ignore */ }
+        location.reload();
+      });
+
+    // Reset button — uses lil-gui's controller.reset() per slider. That sets
+    // each value back to whatever it was at `gui.add()` time (i.e. the
+    // defaults defined in this.guiControls above) AND fires the onChange
+    // callback, which re-applies the side effects (shadow camera reproject,
+    // castShadow toggles, etc.). renderDistance has no onChange (only
+    // onFinishChange) so reset restores its value silently — no surprise
+    // page reload from clicking [ Reset ].
+    //
+    // Our previous attempt did `Object.assign(guiControls, defaults)` plus
+    // manual side-effect calls + `.listen()` on each controller, but the
+    // controller display didn't always pick up the mutation — lil-gui's
+    // own .reset() is the canonical path and the only one guaranteed to
+    // both refresh the DOM and fire onChange.
+    const resetTarget = {
+      reset: () => {
+        // Reset every Graphics controller EXCEPT renderDistance (would just
+        // reset to its already-stored localStorage value, harmless but
+        // confusing if the slider snaps mid-session).
+        for (const c of graficos.controllers) {
+          if (c.property === 'renderDistance') continue;
+          c.reset();
+        }
+        // Reset Ayudas folder too (axisOnOff, activarWireframe).
+        folder.reset();
+      },
+    };
+    graficos.add(resetTarget, 'reset').name('[ Reset ]');
 
     return gui;
   }
@@ -472,6 +711,10 @@ class MyScene extends THREE.Scene {
     document.addEventListener('pointerlockchange', () => {
       if (document.pointerLockElement === canvas) {
         document.body.classList.add('pointer-locked');
+        // Disable OrbitControls while locked — otherwise its pointerdown
+        // handler tries to setPointerCapture on a pointer that no longer
+        // has an active pointer id, throwing InvalidStateError.
+        this.cameraControl.enabled = false;
         // Sync angles from current camera–head offset so there's no jump.
         const head = new THREE.Vector3(
           this.model.position.x,
@@ -484,6 +727,7 @@ class MyScene extends THREE.Scene {
         this._camTheta = Math.atan2(offset.x, offset.z);
       } else {
         document.body.classList.remove('pointer-locked');
+        this.cameraControl.enabled = true;
       }
     });
 
@@ -526,17 +770,19 @@ class MyScene extends THREE.Scene {
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.set(1024, 1024);
 
-    // Frustum orto centrado en el jugador (updateSunPosition lo desplaza).
-    // 25 unidades cubre ~5 chunks alrededor del jugador — suficiente para
-    // sombras visibles sin renderizar todo el mundo visible en el shadow pass.
-    const shadowExtent = 25;
+    // Ortho frustum half-extent centred on the player (updateSunPosition
+    // follows). Default 32 ≈ 2.6 chunks each direction at TC=12, sized to
+    // match `guiControls.shadowExtent`. The GUI slider can push this up if
+    // GPU headroom allows or down for low-end machines. Shadow-pass cost
+    // scales with the ortho area * number of casters inside.
+    const shadowExtent = this.guiControls.shadowExtent;
     const cam = this.sunLight.shadow.camera;
     cam.left = -shadowExtent;
     cam.right = shadowExtent;
     cam.top = shadowExtent;
     cam.bottom = -shadowExtent;
     cam.near = 0.5;
-    cam.far = 500;
+    cam.far = 200;
     cam.updateProjectionMatrix();
 
     this.sunLight.shadow.bias = -0.0005;
@@ -549,7 +795,7 @@ class MyScene extends THREE.Scene {
   // Recorre un Object3D arbitrario y activa cast + receive shadow en
   // cada Mesh hijo. Necesario para personajes/NPCs construidos como grupos
   // con cabeza/torso/extremidades separadas.
-  habilitarSombrasEnSubarbol(obj) {
+  enableShadowsOnSubtree(obj) {
     obj.traverse((child) => {
       if (child.isMesh) {
         child.castShadow = true;
@@ -558,14 +804,6 @@ class MyScene extends THREE.Scene {
     });
   }
 
-  // Configura un InstancedMesh para que proyecte y reciba sombras.
-  // frustumCulled=false porque InstancedMesh no recalcula boundingSphere
-  // al cambiar matrices: sin esto el shadow pass podria descartar el mesh.
-  aplicarSombrasInstancedMesh(mesh) {
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.frustumCulled = false;
-  }
 
   // Mantiene el sol y su target centrados sobre el jugador. Sin esto el
   // frustum ortografico del shadowMap, fijo en el espacio mundo, se queda
@@ -577,42 +815,6 @@ class MyScene extends THREE.Scene {
     this.sunLight.position.set(p.x + o.x, p.y + o.y, p.z + o.z);
     this.sunLight.target.position.set(p.x, p.y, p.z);
     this.sunLight.target.updateMatrixWorld();
-  }
-
-  /**
-   * Compute block grid position from a raycast hit using face normal.
-   * Replaces the old materialIndex switch — works regardless of how groups
-   * are consolidated in the geometry.
-   *
-   * forRemoval=true  → center of the block that was hit (for removal / highlight).
-   * forRemoval=false → center of the adjacent block (for placement).
-   *
-   * Block centers: integer x,z and half-integer y (e.g. y=4.5).
-   */
-  _blockCenterFromHit(hit, forRemoval) {
-    const p = hit.point;
-    const n = hit.face.normal; // local = world: our blocks have no rotation
-    const sign = forRemoval ? -1 : 1;
-
-    if (Math.abs(n.x) > 0.5) {
-      return {
-        x: p.x + n.x * 0.5 * sign,
-        y: Math.floor(p.y) + 0.5,
-        z: Math.round(p.z),
-      };
-    } else if (Math.abs(n.y) > 0.5) {
-      return {
-        x: Math.round(p.x),
-        y: p.y + n.y * 0.5 * sign,
-        z: Math.round(p.z),
-      };
-    } else {
-      return {
-        x: Math.round(p.x),
-        y: Math.floor(p.y) + 0.5,
-        z: p.z + n.z * 0.5 * sign,
-      };
-    }
   }
 
   setLightIntensity(valor) {
@@ -635,177 +837,53 @@ class MyScene extends THREE.Scene {
     // sombras pequenas desaparecian.
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;
+    // Manual shadow update — re-rendered every N frames in update() to amortise
+    // shadow-pass cost across multiple frames.
+    renderer.shadowMap.autoUpdate = false;
 
-    // Se establece un color de fondo en las imágenes que genera el render
     renderer.setClearColor(new THREE.Color(0xEEEEEE), 1.0);
 
-    // Se establece el tamaño, se aprovecha la totalidad de la ventana del navegador
+    // Cap devicePixelRatio: HiDPI/retina screens render at 4x cost otherwise.
+    // 1.5 keeps text/UI sharp without the full retina hit.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+
     renderer.setSize(window.innerWidth, window.innerHeight);
 
-    // La visualización se muestra en el lienzo recibido
+
     document.querySelector(myCanvas).appendChild(renderer.domElement);
 
     return renderer;
   }
 
   getCamera() {
-    // En principio se devuelve la única cámara que tenemos
-    // Si hubiera letias cámaras, este método decidiría qué cámara devuelve cada vez que es consultado
+
+
     return this.camera;
   }
 
   setCameraAspect(ratio) {
-    // Cada vez que el usuario modifica el tamaño de la ventana desde el gestor de ventanas de
-    // su sistema operativo hay que actualizar el ratio de aspecto de la cámara
+
+
     this.camera.aspect = ratio;
-    // Y si se cambia ese dato hay que actualizar la matriz de proyección de la cámara
+
     this.camera.updateProjectionMatrix();
   }
 
   onWindowResize() {
-    // Este método es llamado cada vez que el usuario modifica el tamapo de la ventana de la aplicación
-    // Hay que actualizar el ratio de aspecto de la cámara
+    // Called on window resize — update camera aspect and renderer size.
+
     this.setCameraAspect(window.innerWidth / window.innerHeight);
 
-    // Y también el tamaño del renderizador
+
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
   onDocumentMouseDown(event) {
-    // Registrar posicion de inicio para distinguir click de arrastrar.
-    // El boton der arrastrado rota la camara (OrbitControls); si apenas
-    // se mueve (<= 5px) se interpreta como click y coloca un bloque en mouseup.
-    if (event.which === 3) {
-      this._rightDragStart = { x: event.clientX, y: event.clientY };
-    }
-
-    else if (event.which === 1) {
-      const mouse = new THREE.Vector2();
-
-      mouse.x = (0.5) * 2 - 1;
-      mouse.y = 1 - 2 * (0.5);
-
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(mouse, this.camera);
-
-      const objetosIntersecados = [];
-      for (const tipo in this.mesh) {
-        const objetos = raycaster.intersectObject(this.mesh[tipo], true);
-
-        if (objetos[0] !== undefined && objetos.length > 0 && objetos[0].distance <= 20) {
-          const coord = this._blockCenterFromHit(objetos[0], true);
-          objetosIntersecados.push({ tipo: tipo, coordenada: coord, distancia: objetos[0].distance });
-
-
-
-        }
-
-      }
-
-      //ordena objetos intersecados segun distancia
-      objetosIntersecados.sort(function (a, b) {
-        return a.distancia - b.distancia;
-      });
-
-      if(objetosIntersecados[0] !== undefined){
-        const aux = this.identificarChunk(objetosIntersecados[0].coordenada.x, objetosIntersecados[0].coordenada.z);
-        this.remove(this.mesh[objetosIntersecados[0].tipo]);
-
-        const indice = this.chunk[aux.x][aux.z].findIndex(i => i.x === objetosIntersecados[0].coordenada.x && i.y === objetosIntersecados[0].coordenada.y && i.z === objetosIntersecados[0].coordenada.z);
-
-        if (indice !== -1)
-          this.chunk[aux.x][aux.z].splice(indice, 1);
-
-        const matrix = new THREE.Matrix4();
-
-        let l = 0;
-        this.mesh[objetosIntersecados[0].tipo] = new THREE.InstancedMesh(this.geometriaText[objetosIntersecados[0].tipo], this.materialesText[objetosIntersecados[0].tipo], --this.sizeIMesh[objetosIntersecados[0].tipo]);
-        this.aplicarSombrasInstancedMesh(this.mesh[objetosIntersecados[0].tipo]);
-
-
-        for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
-          for (let i = this.chunkMinMax.min.x; i <= this.chunkMinMax.max.x; i++) {
-            for (let j = 0; j < this.chunk[i][a].length; j++) {
-              if (this.chunk[i][a][j].material === objetosIntersecados[0].tipo) {
-                matrix.setPosition(this.chunk[i][a][j].x, this.chunk[i][a][j].y, this.chunk[i][a][j].z);
-                this.mesh[objetosIntersecados[0].tipo].setMatrixAt(l, matrix);
-                l++;
-              }
-            }
-          }
-        }
-
-        this.add(this.mesh[objetosIntersecados[0].tipo]);
-    }
-    }
-
+    this.raycast.onMouseDown(event);
   }
 
   onDocumentMouseUp(event) {
-    if (event.which !== 3) return;
-    if (!this._rightDragStart) return;
-
-    const dx = event.clientX - this._rightDragStart.x;
-    const dy = event.clientY - this._rightDragStart.y;
-    this._rightDragStart = null;
-
-    // Si el raton se movio mas de 5px fue un drag (rotacion de camara), no un click.
-    if (dx * dx + dy * dy > 25) return;
-
-    // Click derecho: colocar bloque apuntado por el centro de la pantalla.
-    const mouse = new THREE.Vector2();
-    mouse.x = (0.5) * 2 - 1;
-    mouse.y = 1 - 2 * (0.5);
-
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, this.camera);
-
-    const objetosIntersecados = [];
-    for (const tipo in this.mesh) {
-      const objetos = raycaster.intersectObject(this.mesh[tipo], true);
-
-      if (objetos[0] !== undefined && objetos.length > 0 && objetos[0].distance <= 20) {
-        const coord = this._blockCenterFromHit(objetos[0], false);
-        objetosIntersecados.push({ tipo: tipo, coordenada: coord, distancia: objetos[0].distance });
-      }
-    }
-
-    objetosIntersecados.sort(function (a, b) { return a.distancia - b.distancia; });
-
-    if (objetosIntersecados[0] !== undefined) {
-      const aux = this.identificarChunk(objetosIntersecados[0].coordenada.x, objetosIntersecados[0].coordenada.z);
-      this.chunk[aux.x][aux.z].push({
-        material: this.bloqueSeleccionado[this.objeto],
-        x: objetosIntersecados[0].coordenada.x,
-        y: objetosIntersecados[0].coordenada.y,
-        z: objetosIntersecados[0].coordenada.z
-      });
-      this.remove(this.mesh[this.bloqueSeleccionado[this.objeto]]);
-
-      const matrix = new THREE.Matrix4();
-      let l = 0;
-
-      this.mesh[this.bloqueSeleccionado[this.objeto]] = new THREE.InstancedMesh(
-        this.geometriaText[this.bloqueSeleccionado[this.objeto]],
-        this.materialesText[this.bloqueSeleccionado[this.objeto]],
-        ++this.sizeIMesh[this.bloqueSeleccionado[this.objeto]]
-      );
-      this.aplicarSombrasInstancedMesh(this.mesh[this.bloqueSeleccionado[this.objeto]]);
-
-      for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
-        for (let i = this.chunkMinMax.min.x; i <= this.chunkMinMax.max.x; i++) {
-          for (let j = 0; j < this.chunk[i][a].length; j++) {
-            if (this.chunk[i][a][j].material === this.bloqueSeleccionado[this.objeto]) {
-              matrix.setPosition(this.chunk[i][a][j].x, this.chunk[i][a][j].y, this.chunk[i][a][j].z);
-              this.mesh[this.bloqueSeleccionado[this.objeto]].setMatrixAt(l, matrix);
-              l++;
-            }
-          }
-        }
-      }
-
-      this.add(this.mesh[this.bloqueSeleccionado[this.objeto]]);
-    }
+    this.raycast.onMouseUp(event);
   }
 
   _clampCamDist(target, dir, desired) {
@@ -816,59 +894,29 @@ class MyScene extends THREE.Scene {
     this._springArmCaster.near = 0.1;
     this._springArmCaster.far = desired;
     let safeDist = desired;
-    for (const tipo in this.mesh) {
-      const hits = this._springArmCaster.intersectObject(this.mesh[tipo], false);
-      if (hits.length > 0 && hits[0].distance < safeDist) {
-        safeDist = Math.max(MIN_DIST, hits[0].distance - MARGIN);
-      }
+    // Springarm only reaches `desired` units (~camera distance, < 2 chunks).
+    // Filtering candidate meshes to a 2-chunk radius drops the intersect
+    // input from hundreds (allMeshes spans the whole render distance) to a
+    // few dozen — huge win because this runs every 5 frames.
+    const meshes = this.chunkManager.getMeshesNear(this.model.position.x, this.model.position.z, 2);
+    const hits = this._springArmCaster.intersectObjects(meshes, false);
+    if (hits.length > 0 && hits[0].distance < safeDist) {
+      safeDist = Math.max(MIN_DIST, hits[0].distance - MARGIN);
     }
     return safeDist;
   }
 
-  actualizarFeedback() {
-    // Instancias reutilizadas entre frames — evitamos GC pressure: el
-    // raycast se llama a 10Hz minimo (throttled abajo) pero igualmente
-    // queremos cero allocations en hot path.
-    if (!this._feedbackRaycaster) {
-      this._feedbackRaycaster = new THREE.Raycaster();
-      this._feedbackMouse = new THREE.Vector2(0, 0); // centro de pantalla
-    }
-    const raycaster = this._feedbackRaycaster;
-    raycaster.setFromCamera(this._feedbackMouse, this.camera);
-
-    // Recogemos solo el hit mas cercano global, en vez de acumular todos
-    // y ordenar al final. Iteracion habitual: 9 meshes, antes alocaba
-    // array + sort cada frame.
-    let bestHit = null;
-    let bestCoord = null;
-
-    for (const aux in this.mesh) {
-      const mesh = this.mesh[aux];
-      if (mesh.count === 0) continue; // material sin instancias visibles
-
-      const objetos = raycaster.intersectObject(mesh, false);
-      const hit = objetos[0];
-      if (!hit || hit.distance > 20) continue;
-      if (bestHit && hit.distance >= bestHit.distance) continue;
-
-      bestHit = hit;
-      bestCoord = this._blockCenterFromHit(hit, true);
-    }
-
-    if (bestCoord) {
-      this.cajaSeleccionada.position.set(bestCoord.x, bestCoord.y, bestCoord.z);
-      this.cajaSeleccionada.visible = true;
-    }
-    else {
-      //Pone la caja seleccionada invisible
-      this.cajaSeleccionada.visible = false;
-    }
+  updateFeedback() {
+    this.raycast.updateFeedback();
   }
 
   update() {
     if (this.stats) this.stats.update();
+    this._updatePerfPanel();
+    this._benchTick();
 
     const delta=this.clock.getDelta();
+    this._tickAdaptiveLOD(delta);
 
     this.dayNightCycle.update();
     this.updateSunPosition();
@@ -880,9 +928,27 @@ class MyScene extends THREE.Scene {
       this.model.position.z
     );
 
-    const isLocked = document.pointerLockElement === this.renderer.domElement;
+    // Arrow keys also rotate the camera — handy when the mouse isn't
+    // available (KVM switches, etc.).
+    const km = this.mapTeclas;
+    const arrowsHeld = km['ARROWLEFT'] || km['ARROWRIGHT'] || km['ARROWUP'] || km['ARROWDOWN'];
+    if (arrowsHeld) {
+      const arrowSpeed = 0.025 * (this.guiControls.cameraSensitivity ?? 1) * 60 * delta;
+      if (km['ARROWLEFT'])  this._camTheta += arrowSpeed;
+      if (km['ARROWRIGHT']) this._camTheta -= arrowSpeed;
+      if (km['ARROWUP'])    this._camPhi   -= arrowSpeed;
+      if (km['ARROWDOWN'])  this._camPhi   += arrowSpeed;
+      const minPhi = Math.PI * 0.15;
+      const maxPhi = Math.PI * 0.49;
+      this._camPhi = Math.max(minPhi, Math.min(maxPhi, this._camPhi));
+    }
 
-    if (isLocked) {
+    const isLocked = document.pointerLockElement === this.renderer.domElement;
+    // Use the spherical-angle camera path when pointer-locked OR when the
+    // player is steering the camera with the arrow keys.
+    const useManualCam = isLocked || arrowsHeld;
+
+    if (useManualCam) {
       // Pointer-lock mode: drive camera directly from _camTheta/_camPhi angles.
       // Skip cameraControl.update() — it would override the position we set.
       const phi = this._camPhi ?? Math.PI * 0.3;
@@ -918,162 +984,60 @@ class MyScene extends THREE.Scene {
       : this._v3B.set(0, 0.6, -0.8).normalize();
     if (!this._springArmFrame) this._springArmFrame = 0;
     this._springArmFrame++;
-    if (this._springArmFrame % 3 === 0 || this._springArmCachedDist === undefined) {
+    if (this._springArmFrame % 5 === 0 || this._springArmCachedDist === undefined) {
       this._springArmCachedDist = this._clampCamDist(head, postDir, this._cameraDesiredDist);
     }
     if (this._springArmCachedDist < postDist) {
       this.camera.position.copy(head).addScaledVector(postDir, this._springArmCachedDist);
     }
 
-    // Le decimos al renderizador "visualiza la escena que te indico usando la cámara que te estoy pasando"
+    // Shadow map refresh cadence — set by GUI slider (default 3 = ~50 ms
+    // lag at 60 FPS, sweet spot between perceived snappiness and shadow
+    // pass cost). Bump to 1 for instant shadows at full cost; bump to 10+
+    // for cheaper but laggy shadows. Also skip the shadow pass entirely
+    // when the sun is below the "barely illuminates" threshold — shadows
+    // at sun.intensity ≤ 0.65 are imperceptible against the ambient
+    // baseline and the shadow pass is the single most expensive render
+    // pass at high DR.
+    if (!this._shadowFrame) this._shadowFrame = 0;
+    this._shadowFrame++;
+    const shadowEvery = this.guiControls.shadowRefreshFrames | 0 || 3;
+    if (this._shadowFrame % shadowEvery === 0 && this.sunLight.intensity > 0.65) {
+      this.renderer.shadowMap.needsUpdate = true;
+    }
+
+    // Cull distant shadow casters every 30 frames (~0.5 s). Range is GUI-
+    // controlled so the player can trade shadow draw distance against
+    // shadow-pass cost without editing source.
+    if (this._shadowFrame % 30 === 0) {
+      this.chunkManager.updateShadowCastersByDistance(
+        this.model.position.x,
+        this.model.position.z,
+        this.guiControls.shadowCasterRange,
+      );
+      this.chunkManager.updateUndergroundCull(this.model.position.y);
+    }
+
+    // Free block data for chunks far outside the visible window every ~5 s.
+    // Memory used to grow unbounded as the player explored — each chunk's
+    // block list (~1500 objects ≈ 150 KB) was kept forever even after the
+    // mesh disposed. Worker re-gens from seed on return; terrain is
+    // deterministic so the player sees no difference.
+    if (this._shadowFrame % 300 === 0) {
+      this.chunkManager.evictDistantChunkData(this.DISTANCIA_RENDER + 4);
+    }
+
     this.renderer.render(this, this.getCamera());
-    const aux = this.identificarChunk(this.model.position.x, this.model.position.z);
 
-    let renderChunksAgain = false;
-    if (aux.z > (this.chunkMinMax.min.z + this.chunkMinMax.max.z) / 2) {
-      //Movemos los limites
-      this.chunkMinMax.min.z++;
-      this.chunkMinMax.max.z++;
-      renderChunksAgain = true;
-    }
-
-    //Revisar el >=0
-    if (aux.z < (this.chunkMinMax.min.z + this.chunkMinMax.max.z) / 2 && aux.z >= 0) {
-      this.chunkMinMax.min.z--;
-      this.chunkMinMax.max.z--;
-      renderChunksAgain = true;
-    }
-
-    //Parte para las x
-    if (aux.x > (this.chunkMinMax.min.x + this.chunkMinMax.max.x) / 2) {
-      //Movemos los limites
-      this.chunkMinMax.min.x++;
-      this.chunkMinMax.max.x++;
-      renderChunksAgain = true;
-    }
-
-    if (aux.x < (this.chunkMinMax.min.x + this.chunkMinMax.max.x) / 2 && aux.x >= 0) {
-      this.chunkMinMax.min.x--;
-      this.chunkMinMax.max.x--;
-      renderChunksAgain = true;
-    }
-
-    if (renderChunksAgain) {
-      for (const tipo in this.mesh) {
-        this.remove(this.mesh[tipo]);
-        this.mesh[tipo] = new THREE.InstancedMesh(this.geometriaText[tipo], this.materialesText[tipo], this.sizeIMesh[tipo]);
-        this.aplicarSombrasInstancedMesh(this.mesh[tipo]);
-      }
-
-
-      const l = {
-        "Hierba": 0,
-        "Tierra": 0,
-        "Piedra": 0,
-        "MaderaRoble": 0,
-        "HojasRoble": 0,
-        "Roca": 0,
-        "PiedraBase": 0,
-        "PiedraLuminosa": 0,
-        "Cristal": 0
-      };
-
-      const matrix = new THREE.Matrix4();
-
-      for (let a = this.chunkMinMax.min.z; a <= this.chunkMinMax.max.z; a++) {
-        for (let i = this.chunkMinMax.min.x; i <= this.chunkMinMax.max.x; i++) {
-          if (this.chunk[i] !== undefined && this.chunk[i][a] !== undefined) {
-            for (let j = 0; j < this.chunk[i][a].length; j++) {
-              matrix.setPosition(this.chunk[i][a][j].x, this.chunk[i][a][j].y, this.chunk[i][a][j].z);
-              this.mesh[this.chunk[i][a][j].material].setMatrixAt(l[this.chunk[i][a][j].material], matrix);
-              l[this.chunk[i][a][j].material]++;
-            }
-          }
-          else {
-            if (this.chunk[i] === undefined)
-              this.chunk[i] = [];
-            //Genera el chunk que no existia
-            var n_arboles = Math.floor(Math.random() * this.TAM_CHUNK/5);
-            var list_arboles = [];
-
-            for (let m = 0; m < n_arboles; m++) {
-              let posx =  Math.floor(Math.random()* this.TAM_CHUNK);
-              let posz = Math.floor(Math.random() * this.TAM_CHUNK);
-              while(estaColindando(posx,posz,list_arboles)){
-               posx =  Math.floor(Math.random()* this.TAM_CHUNK);
-               posz = Math.floor(Math.random() * this.TAM_CHUNK);
-              }
-              list_arboles.push({ x: posx, y: 10, z: posz });
-            }
-
-            const bloques = [];
-            for (let x = a * this.TAM_CHUNK; x < a * this.TAM_CHUNK + this.TAM_CHUNK; x++) {
-              for (let z = i * this.TAM_CHUNK; z < i * this.TAM_CHUNK + this.TAM_CHUNK; z++) {
-                const v = terrainHeight(this.noise, x, z);
-                matrix.setPosition(z * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR, x * 16 / PM.PIXELES_ESTANDAR);
-                this.mesh["Hierba"].setMatrixAt(l["Hierba"], matrix);
-
-                bloques.push({ x: z * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR, z: x * 16 / PM.PIXELES_ESTANDAR, material: "Hierba" });
-                l["Hierba"]++;
-
-                for (let indice_arbol = 0; indice_arbol < list_arboles.length; indice_arbol++) {
-                  if (list_arboles[indice_arbol].x + i * this.TAM_CHUNK === z && list_arboles[indice_arbol].z + a * this.TAM_CHUNK === x) {
-                    list_arboles[indice_arbol].y = v + 0.5;
-                    list_arboles[indice_arbol].x = list_arboles[indice_arbol].x + i * this.TAM_CHUNK;
-                    list_arboles[indice_arbol].z = list_arboles[indice_arbol].z + a * this.TAM_CHUNK;
-                  }
-                }
-                for (let s = 0; s < 3; s++) {
-                  matrix.setPosition(z * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR - s - 1, x * 16 / PM.PIXELES_ESTANDAR);
-                  this.mesh["Tierra"].setMatrixAt(l["Tierra"], matrix);
-                  bloques.push({ x: z * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR - s - 1, z: x * 16 / PM.PIXELES_ESTANDAR, material: "Tierra" });
-                  l["Tierra"]++;
-                }
-
-                for (let r = 3; r < 8; r++) {
-                  matrix.setPosition(z * 16 / PM.PIXELES_ESTANDAR, v - 8 / PM.PIXELES_ESTANDAR - r - 1, x * 16 / PM.PIXELES_ESTANDAR);
-                  this.mesh["Piedra"].setMatrixAt(l["Piedra"], matrix);
-                  bloques.push({ x: z * 16 / PM.PIXELES_ESTANDAR, y: v - 8 / PM.PIXELES_ESTANDAR - r - 1, z: x * 16 / PM.PIXELES_ESTANDAR, material: "Piedra" });
-                  l["Piedra"]++;
-                }
-              }
-            }
-            for (let indice_arbol = 0; indice_arbol < list_arboles.length; indice_arbol++) {
-              const arbol = new estructuras.ArbolRoble();
-
-              for (let r = 0; r < arbol.bloqueshojas.length; r++) {
-                matrix.setPosition(list_arboles[indice_arbol].x + arbol.bloqueshojas[r].x, list_arboles[indice_arbol].y + arbol.bloqueshojas[r].y - 0.5, list_arboles[indice_arbol].z + arbol.bloqueshojas[r].z);
-                this.mesh["HojasRoble"].setMatrixAt(l["HojasRoble"], matrix);
-                bloques.push({ x: list_arboles[indice_arbol].x + arbol.bloqueshojas[r].x, y: list_arboles[indice_arbol].y + arbol.bloqueshojas[r].y -0.5, z: list_arboles[indice_arbol].z  + arbol.bloqueshojas[r].z, material: "HojasRoble" });
-                l["HojasRoble"]++;
-              }
-
-              for (let r = 0; r < arbol.bloquesmadera.length; r++) {
-                matrix.setPosition(list_arboles[indice_arbol].x + arbol.bloquesmadera[r].x, list_arboles[indice_arbol].y + arbol.bloquesmadera[r].y -0.5, list_arboles[indice_arbol].z + arbol.bloquesmadera[r].z);
-                this.mesh["MaderaRoble"].setMatrixAt(l["MaderaRoble"], matrix);
-                bloques.push({ x: list_arboles[indice_arbol].x + arbol.bloquesmadera[r].x, y: list_arboles[indice_arbol].y + arbol.bloquesmadera[r].y -0.5, z: list_arboles[indice_arbol].z + arbol.bloquesmadera[r].z, material: "MaderaRoble" });
-                l["MaderaRoble"]++;
-              }
-            }
-            this.chunkCollision.push(bloques);
-            const chunkIndex = this.identificarChunk(bloques[0].x, bloques[0].z);
-
-            if (this.chunk[chunkIndex.x] === undefined)
-              this.chunk[chunkIndex.x] = [];
-
-            this.chunk[chunkIndex.x][chunkIndex.z] = bloques;
-          }
-
-        }
-      }
-
-      for (const tipo in this.mesh) {
-        if (l[tipo] !== undefined) this.mesh[tipo].count = l[tipo];
-        this.mesh[tipo].instanceMatrix.needsUpdate = true;
-        this.add(this.mesh[tipo]);
-      }
-
-    }
+    this.chunkManager.updateScroll(this.model.position.x, this.model.position.z);
+    // Keep the LOD bracketer in sync with the player chunk. setPlayerChunk
+    // early-returns when the chunk hasn't changed, so this is ~free; when
+    // the player crosses a chunk boundary it queues rebuilds for any
+    // already-meshed chunks whose LOD flipped.
+    const pc = identifyChunk(this.model.position.x, this.model.position.z, this.TAM_CHUNK);
+    this.chunkManager.setPlayerChunk(pc.x, pc.z);
+    // Drain a few queued mesh builds (worker results land here).
+    this.chunkManager.tick();
 
 
     // Feedback throttled a ~10Hz: el raycaster contra cada InstancedMesh
@@ -1083,146 +1047,40 @@ class MyScene extends THREE.Scene {
     if (this.guiControls.activarWireframe) {
       const now = performance.now();
       if (!this._feedbackNext || now >= this._feedbackNext) {
-        this.actualizarFeedback();
-        this._feedbackNext = now + 100;
+        this.updateFeedback();
+        // 100 ms while the player is actively interacting (moving, looking
+        // around via pointer-lock, holding any key); 500 ms when truly idle.
+        // The raycast walks all live chunk meshes — at DR ≥ 16 that's
+        // hundreds of meshes per call, so cutting it 5× when nothing is
+        // happening is essentially free perf.
+        const km = this.input.keyMap;
+        let anyKey = false;
+        for (const k in km) { if (km[k]) { anyKey = true; break; } }
+        const interactive = anyKey || document.pointerLockElement === this.renderer.domElement;
+        this._feedbackNext = now + (interactive ? 100 : 500);
       }
     }
     else {
-      this.cajaSeleccionada.visible = false;
+      this.raycast.hideSelectionBox();
     }
 
-    //Se eligen todos los bloques de la distancia de renderizado para el calculo de fisicas, solo para el personaje
-    let colisiones =[];
+    const blocks = this.chunkManager.getPlayerCollisions(this.model.position.x, this.model.position.z);
+    this.model.update(blocks, this.mapTeclas);
 
-    for(let i =this.chunkMinMax.min.x; i<this.chunkMinMax.max.x; i++){
-      for(let j =this.chunkMinMax.min.z; j<this.chunkMinMax.max.z; j++){
-        if(this.chunk[i]!== undefined && this.chunk[i][j]!== undefined){
-          colisiones = colisiones.concat(this.chunk[i][j]);
-        }
-      }
-    }
-
-    this.model.update(colisiones, this.mapTeclas);
-
-
-    this.zombie.cabezaW1.lookAt(this.model.position.x, this.model.position.y,this.model.position.z);
-    this.zombie.lookAt(this.model.position.x, this.zombie.position.y,this.model.position.z);
-    this.zombie.boundingBox.lookAt(this.model.position.x, this.zombie.boundingBox.position.y,this.model.position.z)
-
-    //Se escoge el chunk en el que esta el zombie
-    const zombieChunk = this.identificarChunk(this.zombie.position.x, this.zombie.position.z);
-
-    let zombieColisiones=[];
-    for(let i=Math.floor(zombieChunk.x-this.DISTANCIA_RENDER/2); i<=Math.floor(zombieChunk.x+this.DISTANCIA_RENDER/2); i++){
-      for(let j=Math.floor(zombieChunk.z-this.DISTANCIA_RENDER/2); j<=Math.floor(zombieChunk.z+this.DISTANCIA_RENDER/2); j++){
-        if(this.chunk[i]!== undefined && this.chunk[i][j]!== undefined){
-          zombieColisiones = zombieColisiones.concat(this.chunk[i][j]);
-        }
-      }
-    }
-
-    this.zombie.update(zombieColisiones);
-
-
-    //el cerdo mira a la primera posicion de puntoscerdos
-    this.cerdo.lookAt(this.puntoscerdos[this.poscerdo].x, this.cerdo.position.y, this.puntoscerdos[this.poscerdo].z);
-    this.cerdo.boundingBox.lookAt(this.puntoscerdos[this.poscerdo].x, this.cerdo.boundingBox.position.y, this.puntoscerdos[this.poscerdo].z);
-  
-
+    this.npcManager.update(delta);
     
-    //el cerdo para de moverse durante 2 segundos
 
-    if(this.tiempoCerdo<=0) {
 
-      if(Math.abs(this.cerdo.position.x - this.puntoscerdos[this.poscerdo].x) <= 1 && Math.abs(this.cerdo.position.z - this.puntoscerdos[this.poscerdo].z) <= 1){
-        this.poscerdo = (this.poscerdo + 1) % this.puntoscerdos.length;
-        this.tiempoCerdo = 200;
-      }
 
-          const cerdoChunk= this.identificarChunk(this.cerdo.position.x, this.cerdo.position.z);
-
-          let cerdoColisiones=[];
-          for(let i=Math.floor(cerdoChunk.x-this.DISTANCIA_RENDER/2); i<=Math.floor(cerdoChunk.x+this.DISTANCIA_RENDER/2); i++){
-            for(let j=Math.floor(cerdoChunk.z-this.DISTANCIA_RENDER/2); j<=Math.floor(cerdoChunk.z+this.DISTANCIA_RENDER/2); j++){
-              if(this.chunk[i]!== undefined && this.chunk[i][j]!== undefined){
-                cerdoColisiones = cerdoColisiones.concat(this.chunk[i][j]);
-              }
-            }
-          }          
-
-          this.cerdo.update(cerdoColisiones, delta);
-}
-    else{
-          this.tiempoCerdo -= 1;
-
-    }
-    
-    // Este método debe ser llamado cada vez que queramos visualizar la escena de nuevo.
-    // Literalmente le decimos al navegador: "La próxima vez que haya que refrescar la pantalla, llama al método que te indico".
-    // Si no existiera esta línea,  update()  se ejecutaría solo la primera vez.
     requestAnimationFrame(() => this.update())
   }
 
-  onDocumentWheel(event) {
-    const tiles = /** @type {HTMLCollectionOf<HTMLElement>} */ (document.getElementsByClassName("tile"));
-
-    tiles[this.objeto].style.border = "";
-
-    if (event.deltaY > 0) {
-      this.objeto = (this.objeto + 1) % tiles.length;
-    }
-    else {
-      if (this.objeto === 0)
-        this.objeto = tiles.length - 1;
-      else
-        this.objeto--;
-    }
-
-    tiles[this.objeto].style.border = "3px solid black";
-  }
 }
 
 
-/// La función   main
+// main
 window.addEventListener('DOMContentLoaded', function () {
-  // Se instancia la escena pasándole el  div  que se ha creado en el html para visualizar
   const scene = new MyScene("#WebGL-output");
-
-  // Se añaden los listener de la aplicación. En este caso, el que va a comprobar cuándo se modifica el tamaño de la ventana de la aplicación.
   window.addEventListener("resize", () => scene.onWindowResize());
-
-  const clearAllKeys = () => {
-    for (const k in scene.mapTeclas) scene.mapTeclas[k] = false;
-    scene.model.resetPosicion();
-  };
-
-  window.addEventListener("keydown", (event) => {
-    scene.mapTeclas[event.key.toUpperCase()] = true;
-  });
-
-  window.addEventListener("keyup", (event) => {
-    scene.mapTeclas[event.key.toUpperCase()] = false;
-    event.stopImmediatePropagation();
-
-    let allFalse = true;
-    for (const aux in scene.mapTeclas) {
-      if (scene.mapTeclas[aux]) allFalse = false;
-    }
-    if (allFalse) scene.model.resetPosicion();
-  });
-
-  // Clear keys when window loses focus — prevents stuck WASD after alt-tab
-  // or after pointer-capture (right-drag) swallows keyup events.
-  window.addEventListener("blur", clearAllKeys);
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) clearAllKeys();
-  });
-
-  //----------------------------------------------------------------------------------------
-  window.addEventListener("mousedown", (event) => scene.onDocumentMouseDown(event));
-  window.addEventListener("mouseup", (event) => scene.onDocumentMouseUp(event));
-  window.addEventListener("contextmenu", (event) => event.preventDefault());
-  window.addEventListener("wheel", (event) => scene.onDocumentWheel(event));
-  // Que no se nos olvide, la primera visualización.
   scene.update();
 });

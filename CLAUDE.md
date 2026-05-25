@@ -32,6 +32,8 @@ Run:
 
 Requires `npm install` first (deps en `node_modules/` servidas estáticamente).
 
+**Dev server siempre corriendo en <http://localhost:8080> durante sesiones.** No levantar otro servidor (`npm run dev`, `serve`, etc.) — el usuario ya lo tiene abierto. Los cambios a `src/` se sirven en caliente; basta con que el usuario refresque el navegador para probar.
+
 ## File map
 
 Todos los `.js` de aplicación viven en `src/`. Tests `*.test.js` viven junto al código fuente.

@@ -1,17 +1,11 @@
 import * as THREE from 'three'
 import * as PM from './ParametrosMundo.js'
 import * as C from './colisiones.js'
+import { NPC } from './NPC.js'
 
-class Zombie extends THREE.Object3D {
-  degToRad(deg) {
-    return deg * (Math.PI / 180)
-  }
+class Zombie extends NPC {
   constructor(gui, titleGui) {
     super();
-
-    this.clock = new THREE.Clock();
-    this.cambiarAnimacion = false;
-    this.maxMovimientoExt = this.degToRad(60);
 
     this.createGUI(gui, titleGui);
 
@@ -235,18 +229,14 @@ class Zombie extends THREE.Object3D {
 
     this.add(this.wrapperFinal);
 
-    //BoundingBox
-    const boundingBoxGeom = new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 32 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR);
-    this.boundingBox = new THREE.Mesh(boundingBoxGeom, new THREE.MeshPhongMaterial());
-    this.boundingBox.position.y += 16 / PM.PIXELES_ESTANDAR
+    this._initPhysics(
+      new THREE.BoxGeometry(8 / PM.PIXELES_ESTANDAR, 32 / PM.PIXELES_ESTANDAR, 8 / PM.PIXELES_ESTANDAR),
+      16 / PM.PIXELES_ESTANDAR
+    );
+    // Override colision with zombie-specific params
+    this.physics = new C.Collisions(true, 0.8);
 
-    //CAMBIAR NOMBRE
-    //Bloque para realizar las colisiones
-    this.bloqueRaro = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1));
-
-    this.colision = new C.Colisiones(true, 0.8);  //Modulo de colisiones
-
-    this.altura = 32;   //Necesario para las colisiones
+    this.height = 32;   // required for physics offset calculation
   }
 
 
@@ -255,17 +245,17 @@ class Zombie extends THREE.Object3D {
     this.guiControls = {
       moviendose: false,
 
-      // Un botón para dejarlo todo en su posición inicial
-      // Cuando se pulse se ejecutará esta función.
+      // reset button
+
       reset: () => {
         this.guiControls.moviendose = false;
       }
     }
 
     const folder = gui.addFolder(titleGui);
-    // Estas lineas son las que añaden los componentes de la interfaz
-    // Las tres cifras indican un valor mínimo, un máximo y el incremento
-    // El método   listen()   permite que si se cambia el valor de la letiable en código, el deslizador de la interfaz se actualice
+    // GUI sliders
+
+
     folder.add(this.guiControls, 'moviendose').name('Movimiento');
   }
 
@@ -274,42 +264,31 @@ class Zombie extends THREE.Object3D {
   }
 
 
-  animacion(esForward, velocidad) {
-    const velFinal = (esForward) ? velocidad : -velocidad;
+  animacion(isForward, speed) {
+    const finalSpeed = (isForward) ? speed : -speed;
 
     if (this.cambiarAnimacion) {
-      this.piernaLW1.rotation.x += velFinal
-      this.piernaRW1.rotation.x -= velFinal
+      this.piernaLW1.rotation.x += finalSpeed
+      this.piernaRW1.rotation.x -= finalSpeed
 
-      if ((esForward && this.piernaRW1.rotation.x <= -this.maxMovimientoExt) || (!esForward && this.piernaRW1.rotation.x >= this.maxMovimientoExt)) {
+      if ((isForward && this.piernaRW1.rotation.x <= -this.maxMovimientoExt) || (!isForward && this.piernaRW1.rotation.x >= this.maxMovimientoExt)) {
         this.cambiarAnimacion = false;
       }
     }
     else {
-      this.piernaLW1.rotation.x += -velFinal
-      this.piernaRW1.rotation.x -= -velFinal
+      this.piernaLW1.rotation.x += -finalSpeed
+      this.piernaRW1.rotation.x -= -finalSpeed
 
-      if ((esForward && this.piernaRW1.rotation.x >= this.maxMovimientoExt) || (!esForward && this.piernaRW1.rotation.x <= -this.maxMovimientoExt)) {
+      if ((isForward && this.piernaRW1.rotation.x >= this.maxMovimientoExt) || (!isForward && this.piernaRW1.rotation.x <= -this.maxMovimientoExt)) {
         this.cambiarAnimacion = true;
       }
     }
   }
 
   update(bloques) {
-    const delta = this.clock.getDelta();
-    let velocidad= delta * 4.317;
-    this.animacion(true, velocidad);
-
-    velocidad = delta * 4.317;
-    const vectorMovimiento = new THREE.Vector3(0, 0, 1);
     if (this.guiControls.moviendose) {
-
-      //vectormovimiento es el vector entre el modelo y el zombie
-      this.translateOnAxis(vectorMovimiento.normalize(), velocidad);
-      this.boundingBox.translateOnAxis(vectorMovimiento, velocidad);
+      this._stepPhysics(bloques, this.clock.getDelta());
     }
-
-    this.colision.update(bloques, this, this.boundingBox, null, vectorMovimiento, velocidad);
   }
 }
 

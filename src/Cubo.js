@@ -28,19 +28,19 @@ function consolidateBoxGroups(geo, faceGroups) {
   for (const g of groups) geo.addGroup(g.start, g.count, g.materialIndex);
 }
 
-class Cubo {
+class Block {
   constructor() {
     this.geometria = new THREE.BoxGeometry(16/PM.PIXELES_ESTANDAR, 16/PM.PIXELES_ESTANDAR, 16/PM.PIXELES_ESTANDAR);
     /** @type {THREE.Material | THREE.Material[]} */
-    this.material = new THREE.MeshPhongMaterial({color: 0xCF0000});
+    this.material = new THREE.MeshLambertMaterial({color: 0xCF0000});
   }
 }
 
-class Hierba extends Cubo {
+class Grass extends Block {
   constructor() {
     super();
     const loader = new THREE.TextureLoader();
-    const ladoTex = loader.load('./texturas/hierba/ladocubo.png');
+    const sideTex = loader.load('./texturas/hierba/ladocubo.png');
 
     // Consolidate: sides (0 draw call) + top (1) + bottom (2) = 3 draw calls vs 6
     consolidateBoxGroups(this.geometria, [
@@ -50,24 +50,24 @@ class Hierba extends Cubo {
     ]);
 
     this.material = [
-      new THREE.MeshPhongMaterial({ map: ladoTex }),
-      new THREE.MeshPhongMaterial({ map: loader.load('./texturas/hierba/top.png'), color: 0xa2ff6e }),
-      new THREE.MeshPhongMaterial({ map: loader.load('./texturas/hierba/bottom.png') }),
+      new THREE.MeshLambertMaterial({ map: sideTex }),
+      new THREE.MeshLambertMaterial({ map: loader.load('./texturas/hierba/top.png'), color: 0xa2ff6e }),
+      new THREE.MeshLambertMaterial({ map: loader.load('./texturas/hierba/bottom.png') }),
     ];
   }
 }
 
-class Tierra extends Cubo {
+class Dirt extends Block {
   constructor() {
     super();
     // All faces same texture — single material = 1 draw call (vs 6)
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/tierra/tierra.png')
     });
   }
 }
 
-class MaderaRoble extends Cubo {
+class OakWood extends Block {
   constructor() {
     super();
     const loader = new THREE.TextureLoader();
@@ -79,17 +79,17 @@ class MaderaRoble extends Cubo {
     ]);
 
     this.material = [
-      new THREE.MeshPhongMaterial({ map: loader.load('./texturas/maderaroble/maderaroblelado.png') }),
-      new THREE.MeshPhongMaterial({ map: loader.load('./texturas/maderaroble/maderarobletop.png') }),
+      new THREE.MeshLambertMaterial({ map: loader.load('./texturas/maderaroble/maderaroblelado.png') }),
+      new THREE.MeshLambertMaterial({ map: loader.load('./texturas/maderaroble/maderarobletop.png') }),
     ];
   }
 }
 
-class HojaRoble extends Cubo {
+class OakLeaves extends Block {
   constructor() {
     super();
     // All faces same texture — single material = 1 draw call (vs 6)
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/hojaroble/hoja.png'),
       alphaTest: 0.5,
       color: 0x345345,
@@ -97,50 +97,52 @@ class HojaRoble extends Cubo {
   }
 }
 
-class Piedra extends Cubo {
+class Stone extends Block {
   constructor() {
     super();
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/piedra/piedra.png')
     });
   }
 }
 
-class Roca extends Cubo {
+class Rock extends Block {
   constructor() {
     super();
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/roca/roca.png')
     });
   }
 }
 
-class PiedraBase extends Cubo {
+class BaseStone extends Block {
   constructor() {
     super();
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/bedrock.png')
     });
   }
 }
 
-class PiedraLuminosa extends Cubo {
+class GlowStone extends Block {
   constructor() {
     super();
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/glowstone.png')
     });
   }
 }
 
-class Cristal extends Cubo {
+class Glass extends Block {
   constructor() {
     super();
-    this.material = new THREE.MeshPhongMaterial({
+    this.material = new THREE.MeshLambertMaterial({
       map: new THREE.TextureLoader().load('./texturas/cristal.png'),
       alphaTest: 0.5,
     });
   }
 }
 
-export {Hierba, Tierra, Roca, Piedra, HojaRoble, MaderaRoble, PiedraBase, Cristal, PiedraLuminosa};
+export { Grass, Dirt, Rock, Stone, OakLeaves, OakWood, BaseStone, Glass, GlowStone };
+// Legacy aliases for backwards compat during migration
+export { Grass as Hierba, Dirt as Tierra, Rock as Roca, Stone as Piedra, OakLeaves as HojaRoble, OakWood as MaderaRoble, BaseStone as PiedraBase, Glass as Cristal, GlowStone as PiedraLuminosa };

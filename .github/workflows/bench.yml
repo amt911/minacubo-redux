@@ -1,0 +1,109 @@
+name: Bench
+
+on:
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: 'Number of bench runs (median reported)'
+        default: '3'
+      duration_ms:
+        description: 'Recording window per run (ms)'
+        default: '20000'
+      DR:
+        description: 'Render distance (DISTANCIA_RENDER)'
+        default: '12'
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel stale runs on the same branch — bench is slow, no point running twice.
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Install xvfb + GL deps
+        # xvfb gives Chrome a virtual display so we can run with --show=true and
+        # let the browser use mesa GL (via xvfb) instead of the headless-only
+        # swiftshader ANGLE path. Mesa software rasteriser is still software,
+        # but at least it exercises the full GL stack the way real Chrome does.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xvfb libgl1-mesa-dri libglx-mesa0 libglu1-mesa
+
+      - name: Install Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+
+      - name: Start static dev server
+        # serve from the repo root; the bench harness loads /?bench=1.
+        run: |
+          nohup npx serve -l 8080 . > /tmp/serve.log 2>&1 &
+          for i in {1..30}; do
+            if curl -sf http://localhost:8080/ -o /dev/null; then
+              echo "server up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server failed to start"
+          cat /tmp/serve.log
+          exit 1
+
+      - name: Run bench
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+          BENCH_RUNS: ${{ github.event.inputs.runs || '3' }}
+          BENCH_DURATION: ${{ github.event.inputs.duration_ms || '20000' }}
+          BENCH_DR: ${{ github.event.inputs.DR || '12' }}
+        run: |
+          xvfb-run -a --server-args="-screen 0 1600x1000x24" \
+            node scripts/bench.mjs \
+              --runs "$BENCH_RUNS" \
+              --duration "$BENCH_DURATION" \
+              --DR "$BENCH_DR" \
+              --show true \
+              --gpu true \
+              --out bench-report.json
+
+      - name: Diff vs baseline (if committed)
+        # Repo-tracked `bench/baseline.json` is the comparison target. Update
+        # it via the `workflow_dispatch` "promote" job (or hand-edit + PR) when
+        # current numbers should become the new baseline. Diff is informational
+        # only — it never fails the job.
+        if: always()
+        run: |
+          if [ -f bench/baseline.json ]; then
+            node scripts/bench-diff.mjs bench/baseline.json bench-report.json
+          else
+            echo "No bench/baseline.json committed — skipping diff."
+          fi
+
+      - name: Upload bench report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-report-${{ github.sha }}
+          path: |
+            bench-report.json
+            /tmp/serve.log
+          if-no-files-found: warn
+          retention-days: 30

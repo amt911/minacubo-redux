@@ -16,7 +16,7 @@
  * @param {number} tamChunk
  * @returns {Coord2}
  */
-export function identificarChunk(x, z, tamChunk) {
+export function identifyChunk(x, z, tamChunk) {
   return {
     x: Math.round((x - (x % tamChunk)) / tamChunk),
     z: Math.round((z - (z % tamChunk)) / tamChunk),
@@ -40,8 +40,7 @@ export function chunkToWorld(chunkX, chunkZ, tamChunk) {
  * past the midpoint of the current window on either axis, the window slides
  * one chunk in that direction. Returns a *new* {min, max} (does not mutate).
  *
- * Mirrors the original behaviour: the negative-direction shift only fires
- * when the resulting min is still >= 0 (avoids going into negative chunks).
+ * Window can shift into negative chunk indices — terrain generates in all directions.
  *
  * @param {Coord2} playerChunk
  * @param {ChunkMinMax} minMax
@@ -51,23 +50,16 @@ export function shiftMinMaxIfNeeded(playerChunk, minMax) {
   const min = { ...minMax.min };
   const max = { ...minMax.max };
 
+  // Even-window hysteresis: with DR even, mid is a half-integer, so an
+  // integer chunk index always sits on one side of it. Without ceil/floor
+  // the window would oscillate every frame between two states.
   const midZ = (min.z + max.z) / 2;
-  if (playerChunk.z > midZ) {
-    min.z++;
-    max.z++;
-  } else if (playerChunk.z < midZ && playerChunk.z >= 0) {
-    min.z--;
-    max.z--;
-  }
+  if (playerChunk.z > Math.ceil(midZ))       { min.z++; max.z++; }
+  else if (playerChunk.z < Math.floor(midZ)) { min.z--; max.z--; }
 
   const midX = (min.x + max.x) / 2;
-  if (playerChunk.x > midX) {
-    min.x++;
-    max.x++;
-  } else if (playerChunk.x < midX && playerChunk.x >= 0) {
-    min.x--;
-    max.x--;
-  }
+  if (playerChunk.x > Math.ceil(midX))       { min.x++; max.x++; }
+  else if (playerChunk.x < Math.floor(midX)) { min.x--; max.x--; }
 
   return { min, max };
 }

@@ -15,6 +15,8 @@
     "compose:shell": "docker compose exec minacubo sh",
     "compose:prod": "docker compose -f docker-compose.prod.yml up --build",
     "compose:prod:down": "docker compose -f docker-compose.prod.yml down",
+    "bench": "node scripts/bench.mjs",
+    "bench:diff": "node scripts/bench-diff.mjs",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --passWithNoTests",
@@ -32,6 +34,7 @@
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.8.3",
+    "puppeteer-core": "^25.0.4",
     "serve": "^14.2.6",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"

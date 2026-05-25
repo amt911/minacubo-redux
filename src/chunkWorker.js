@@ -1,0 +1,64 @@
+// Module Web Worker — generates chunk block data off the main thread.
+// Imports simplex-noise via absolute URL because workers don't inherit the
+// document's importmap. Static import (not top-level await) so the worker
+// finishes loading deterministically before any messages are processed.
+
+import { generateChunkBlocks } from './chunkGen.js';
+import { createNoise2D } from '/node_modules/simplex-noise/dist/esm/simplex-noise.js';
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function fbm(noiseFn, x, y, { octaves = 3, persistence = 0.5, lacunarity = 2 } = {}) {
+  let total = 0, amp = 1, freq = 1, max = 0;
+  for (let i = 0; i < octaves; i++) {
+    total += noiseFn(x * freq, y * freq) * amp;
+    max += amp;
+    amp *= persistence;
+    freq *= lacunarity;
+  }
+  return total / max;
+}
+
+function terrainHeight(noiseFn, x, z) {
+  const detail = noiseFn(x * 0.05, z * 0.05) * 1;
+  const hills  = fbm(noiseFn, x * 0.015, z * 0.015, { octaves: 3 }) * 7;
+  const mNoise = noiseFn(x * 0.003, z * 0.003);
+  let mountains = 0;
+  if (mNoise > 0.3) {
+    const t = (mNoise - 0.3) / 0.7;
+    mountains = Math.pow(t, 4) * 45;
+  }
+  return Math.round(4 + detail + hills + mountains);
+}
+
+// Seed is sent with every gen task so we don't depend on an init-then-gen
+// message ordering — top-level await can lead to messages arriving before
+// `self.onmessage` is attached, so a separate init message could race.
+let getHeight = null;
+
+self.onmessage = (e) => {
+  const data = e.data;
+  if (data.type !== 'gen') return;
+
+  if (!getHeight) {
+    const base = createNoise2D(mulberry32(data.seed));
+    getHeight = (x, z) => terrainHeight(base, x, z);
+  }
+
+  const r = generateChunkBlocks(getHeight, data.chunkX, data.chunkZ, data.TC);
+  self.postMessage({
+    type: 'result',
+    id: data.id,
+    chunkX: data.chunkX,
+    chunkZ: data.chunkZ,
+    blocks: r.blocks,
+  });
+};
