@@ -572,18 +572,30 @@ class MyScene extends THREE.Scene {
         location.reload();
       });
 
-    // Reset button — restores every guiControls field listed in _guiDefaults
-    // and re-runs each setting's side-effect so the change takes effect
-    // without waiting for the next 30-frame cull tick. Slider displays
-    // update because each controller above is .listen()'d.
+    // Reset button — uses lil-gui's controller.reset() per slider. That sets
+    // each value back to whatever it was at `gui.add()` time (i.e. the
+    // defaults defined in this.guiControls above) AND fires the onChange
+    // callback, which re-applies the side effects (shadow camera reproject,
+    // castShadow toggles, etc.). renderDistance has no onChange (only
+    // onFinishChange) so reset restores its value silently — no surprise
+    // page reload from clicking [ Reset ].
+    //
+    // Our previous attempt did `Object.assign(guiControls, defaults)` plus
+    // manual side-effect calls + `.listen()` on each controller, but the
+    // controller display didn't always pick up the mutation — lil-gui's
+    // own .reset() is the canonical path and the only one guaranteed to
+    // both refresh the DOM and fire onChange.
     const resetTarget = {
       reset: () => {
-        Object.assign(this.guiControls, this._guiDefaults);
-        applyShadowsEnabled(this.guiControls.shadowsEnabled);
-        applyShadowResolution(this.guiControls.shadowResolution);
-        applyShadowExtent(this.guiControls.shadowExtent);
-        applyShadowCasterRange();
-        this.setAxisVisible(this.guiControls.axisOnOff);
+        // Reset every Graphics controller EXCEPT renderDistance (would just
+        // reset to its already-stored localStorage value, harmless but
+        // confusing if the slider snaps mid-session).
+        for (const c of graficos.controllers) {
+          if (c.property === 'renderDistance') continue;
+          c.reset();
+        }
+        // Reset Ayudas folder too (axisOnOff, activarWireframe).
+        folder.reset();
       },
     };
     graficos.add(resetTarget, 'reset').name('[ Reset ]');
