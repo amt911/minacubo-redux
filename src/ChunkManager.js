@@ -63,8 +63,13 @@ export class ChunkManager {
     // that the current mesh was built at, so updateScroll can detect a
     // transition and queue a rebuild.
     this.lodNearRadius = 4;
+    // Chunks beyond (lodNearRadius + lodUltraFarOffset) drop to ULTRAFAR:
+    // one block per column, no trees, no cliff fill. At DR=64 this collapses
+    // the outer ring of ~3000 chunks from 3-5 materials each to 1-2 max —
+    // roughly halves the visible draw-call count when looking outward.
+    this.lodUltraFarOffset = 12;
     this._playerChunk = { x: 0, z: 0 };
-    /** @type {Object<number, Object<number, 'NEAR' | 'FAR'>>} */
+    /** @type {Object<number, Object<number, 'NEAR' | 'FAR' | 'ULTRAFAR'>>} */
     this.chunkLOD = {};
 
     /** @type {{min:{x:number,z:number}, max:{x:number,z:number}}} */
@@ -233,7 +238,23 @@ export class ChunkManager {
     this.chunkLOD[chunkX][chunkZ] = lod;
 
     let blocksToMesh = blocks;
-    if (lod === 'FAR') {
+    if (lod === 'ULTRAFAR') {
+      // One block per column — the topmost GROUND block (trees skipped).
+      // At this distance (>NEAR+12 chunks) trees would just be 2-block dots
+      // and not worth a separate material/draw call. Cliffs lose detail too
+      // but are barely visible at >300 blocks away. Per-chunk material count
+      // drops from 3-5 to 1-2 in typical terrain.
+      /** @type {Map<number, {x:number,y:number,z:number,material:string}>} */
+      const tops = new Map();
+      for (let i = 0; i < blocks.length; i++) {
+        const b = blocks[i];
+        if (b.material === 'OakWood' || b.material === 'OakLeaves') continue;
+        const colKey = (b.x + 32768) * 65536 + (b.z + 32768);
+        const prev = tops.get(colKey);
+        if (prev === undefined || b.y > prev.y) tops.set(colKey, b);
+      }
+      blocksToMesh = Array.from(tops.values());
+    } else if (lod === 'FAR') {
       // Per-column top Y + tree-material passthrough. Earlier we kept only
       // the topmost block per column, but that destroyed two things:
       //   1. Trees became floating leaf canopies because their wood trunks
@@ -890,12 +911,14 @@ export class ChunkManager {
     }
   }
 
-  /** @param {number} cx @param {number} cz @returns {'NEAR' | 'FAR'} */
+  /** @param {number} cx @param {number} cz @returns {'NEAR' | 'FAR' | 'ULTRAFAR'} */
   _chunkLOD(cx, cz) {
     const d = Math.max(
       Math.abs(cx - this._playerChunk.x),
       Math.abs(cz - this._playerChunk.z),
     );
-    return d <= this.lodNearRadius ? 'NEAR' : 'FAR';
+    if (d <= this.lodNearRadius) return 'NEAR';
+    if (d <= this.lodNearRadius + this.lodUltraFarOffset) return 'FAR';
+    return 'ULTRAFAR';
   }
 }
