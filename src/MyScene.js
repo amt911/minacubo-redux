@@ -356,7 +356,7 @@ class MyScene extends THREE.Scene {
       }
     }
 
-    const chunkCount = this.chunkManager.chunkCollision.length;
+    const chunkCount = this.chunkManager.chunkCount;
     const queueLen = this.chunkManager._meshQueue.length;
     const pendingGens = this.chunkManager._pendingGens.size;
     const buildAvg = this.chunkManager._buildTimeAvgMs;
@@ -801,6 +801,14 @@ class MyScene extends THREE.Scene {
     if (!this._shadowFrame) this._shadowFrame = 0;
     this._shadowFrame++;
     if (this._shadowFrame % 3 === 0) this.renderer.shadowMap.needsUpdate = true;
+
+    // Cull distant shadow casters every 30 frames (~0.5 s). The shadow
+    // camera frustum only covers ~3 chunks around the player so meshes
+    // further away never write to the shadow map; toggling castShadow off
+    // saves their per-mesh setup in the shadow pass.
+    if (this._shadowFrame % 30 === 0) {
+      this.chunkManager.updateShadowCastersByDistance(this.model.position.x, this.model.position.z);
+    }
 
     this.renderer.render(this, this.getCamera());
 

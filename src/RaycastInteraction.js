@@ -53,6 +53,10 @@ export class RaycastInteraction {
 
     this._feedbackRaycaster = new THREE.Raycaster();
     this._feedbackMouse = new THREE.Vector2(0, 0);
+    // Pooled — click handlers were allocating a fresh Raycaster + Vector2 per
+    // mousedown/up.
+    this._clickRaycaster = new THREE.Raycaster();
+    this._clickMouse = new THREE.Vector2(0, 0);
     this._instanceMatrix = new THREE.Matrix4();
   }
 
@@ -133,11 +137,9 @@ export class RaycastInteraction {
 
     if (event.button !== 0) return;
 
-    const mouse = new THREE.Vector2(0, 0);
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, this._camera);
+    this._clickRaycaster.setFromCamera(this._clickMouse, this._camera);
 
-    const hit = this._nearestHit(raycaster, true);
+    const hit = this._nearestHit(this._clickRaycaster, true);
     if (!hit) return;
 
     const { tipo, coordenada } = hit;
@@ -163,11 +165,9 @@ export class RaycastInteraction {
 
     if (dx * dx + dy * dy > 25) return; // drag, not click
 
-    const mouse = new THREE.Vector2(0, 0);
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(mouse, this._camera);
+    this._clickRaycaster.setFromCamera(this._clickMouse, this._camera);
 
-    const hit = this._nearestHit(raycaster, false);
+    const hit = this._nearestHit(this._clickRaycaster, false);
     if (!hit) return;
 
     const { coordenada } = hit;

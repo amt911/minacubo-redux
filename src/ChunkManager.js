@@ -40,8 +40,12 @@ export class ChunkManager {
     /** @type {Array<Array<Array<{x:number,y:number,z:number,material:string}>>>} */
     this.chunk = [];
 
-    /** @type {Array<Array<{x:number,y:number,z:number,material:string}>>} */
-    this.chunkCollision = [];
+    // Number of chunks whose block data has been generated. Monotonic — chunk
+    // *meshes* come and go but the block lists stay (collision queries need
+    // them off-screen). Was previously a parallel `chunkCollision` array of
+    // block lists used only for its `.length` in the perf HUD; the array
+    // grew unbounded and held references to disposed-chunk block data.
+    this.chunkCount = 0;
 
     /** @type {{min:{x:number,z:number}, max:{x:number,z:number}}} */
     this.chunkMinMax = {
@@ -139,8 +143,8 @@ export class ChunkManager {
   }
 
   _storeChunkData(chunkX, chunkZ, blocks) {
-    this.chunkCollision.push(blocks);
     if (!this.chunk[chunkX]) this.chunk[chunkX] = [];
+    if (!this.chunk[chunkX][chunkZ]) this.chunkCount++;
     this.chunk[chunkX][chunkZ] = blocks;
 
     // Collision cache covers the 3×3 chunks around the last queried player
@@ -174,9 +178,17 @@ export class ChunkManager {
     const blocks = this.chunk[chunkX]?.[chunkZ];
     if (!blocks || blocks.length === 0) return;
 
-    // Occupancy set spans this chunk plus its 8 immediate neighbours so
-    // boundary blocks test against real cross-chunk neighbours, not against
-    // empty air.
+    // Bit-packed (x, y, z) → Number occupancy key. Block coords have integer
+    // x/z and half-integer y (n + 0.5 from chunkGen). Encoding:
+    //   bits  0..7  : (y * 2 + Y_OFF)  → y ∈ [-8.5, 119.5]  (8 bits)
+    //   bits  8..23 : (z + Z_OFF)      → z ∈ [-32768, 32767] (16 bits)
+    //   bits 24..39 : (x + X_OFF)      → x ∈ [-32768, 32767] (16 bits)
+    // Total 40 bits — fits in JS's safe integer range. Replaces a per-block
+    // string concat (`x + ',' + y + ',' + z`) that allocated thousands of
+    // throwaway strings during every chunk rebuild and the per-block
+    // neighbour scan below; bit packing has no allocations, and Set<Number>
+    // hashes faster than Set<String> in V8.
+    const X_OFF = 32768, Z_OFF = 32768, Y_OFF = 17;
     const occupancy = new Set();
     for (let dx = -1; dx <= 1; dx++) {
       for (let dz = -1; dz <= 1; dz++) {
@@ -184,7 +196,9 @@ export class ChunkManager {
         if (!neighbor) continue;
         for (let i = 0; i < neighbor.length; i++) {
           const b = neighbor[i];
-          occupancy.add(b.x + ',' + b.y + ',' + b.z);
+          occupancy.add(
+            ((b.x + X_OFF) * 65536 + (b.z + Z_OFF)) * 256 + ((b.y * 2) | 0) + Y_OFF,
+          );
         }
       }
     }
@@ -193,13 +207,17 @@ export class ChunkManager {
     const groups = {};
     for (let i = 0; i < blocks.length; i++) {
       const b = blocks[i];
+      const bxz = (b.x + X_OFF) * 65536 + (b.z + Z_OFF);
+      const by  = ((b.y * 2) | 0) + Y_OFF;
+      // pre-compute components and inline the 6 neighbour keys: the deltas
+      // touch one axis at a time, so most factors stay constant.
       if (
-        !occupancy.has((b.x + 1) + ',' + b.y + ',' + b.z) ||
-        !occupancy.has((b.x - 1) + ',' + b.y + ',' + b.z) ||
-        !occupancy.has(b.x + ',' + (b.y + 1) + ',' + b.z) ||
-        !occupancy.has(b.x + ',' + (b.y - 1) + ',' + b.z) ||
-        !occupancy.has(b.x + ',' + b.y + ',' + (b.z + 1)) ||
-        !occupancy.has(b.x + ',' + b.y + ',' + (b.z - 1))
+        !occupancy.has((bxz + 65536) * 256 + by)              ||  // +x
+        !occupancy.has((bxz - 65536) * 256 + by)              ||  // -x
+        !occupancy.has(bxz * 256 + by + 2)                    ||  // +y (y step = 1 → key step = 2)
+        !occupancy.has(bxz * 256 + by - 2)                    ||  // -y
+        !occupancy.has((bxz + 1) * 256 + by)                  ||  // +z
+        !occupancy.has((bxz - 1) * 256 + by)                     // -z
       ) {
         if (!groups[b.material]) groups[b.material] = [];
         groups[b.material].push(b);
@@ -451,6 +469,42 @@ export class ChunkManager {
     }
 
     return true;
+  }
+
+  /**
+   * Toggle `castShadow` on chunk meshes by distance from the player chunk.
+   * The sun's shadow camera frustum only covers ~3 chunks each way from the
+   * player (see MyScene.createLights, shadowExtent=16), so any shadow caster
+   * beyond that contributes zero pixels to the shadow map but still costs a
+   * draw call in the shadow pass.
+   *
+   * Idempotent and cheap — iterates current meshes once, two abs subtractions
+   * per mesh. Safe to call every N frames from the main loop.
+   *
+   * @param {number} worldX
+   * @param {number} worldZ
+   * @param {number} chunkRadius default 2 (covers shadowExtent / TC + slack)
+   */
+  updateShadowCastersByDistance(worldX, worldZ, chunkRadius = 2) {
+    const pc = identifyChunk(worldX, worldZ, this.TAM_CHUNK);
+    for (const xKey in this.chunkMeshes) {
+      const ix = +xKey;
+      const dx = Math.abs(ix - pc.x);
+      const col = this.chunkMeshes[xKey];
+      for (const zKey in col) {
+        const iz = +zKey;
+        const inRange = dx <= chunkRadius && Math.abs(iz - pc.z) <= chunkRadius;
+        const types = col[zKey];
+        for (const k in types) {
+          const mesh = types[k];
+          // Only toggle types that are shadow casters in the first place — we
+          // never want to enable castShadow on Stone/Dirt/Rock bulk.
+          if (mesh.userData.type && blockCastsShadow(mesh.userData.type)) {
+            mesh.castShadow = inRange;
+          }
+        }
+      }
+    }
   }
 
   /**
