@@ -72,8 +72,18 @@ export class NPCManager {
   // (the shadow pass is the single most expensive renderer cost per mesh).
   // Past FREEZE_RANGE we skip physics + animation entirely — the zombie
   // freezes in place. Both are squared to avoid sqrt per zombie per frame.
+  //
+  // FREEZE_RANGE was bumped 60 → 100: at 60 the cumulative separation drift
+  // during sustained autojump-vs-wall cycles could carry the outermost
+  // zombies past the threshold, after which they sat frozen out of the
+  // camera frustum — the user-visible "horde disappears" symptom.
   static SHADOW_RANGE_SQ = 32 * 32;
-  static FREEZE_RANGE_SQ = 60 * 60;
+  static FREEZE_RANGE_SQ = 100 * 100;
+  // Last-resort teleport: any zombie that ends up beyond this gets snapped
+  // back to a fresh ring around the player. Triggers exclusively on
+  // pathological drift (NaN survivor, separation runaway) — normal play
+  // keeps zombies inside FREEZE_RANGE.
+  static TELEPORT_RANGE_SQ = 150 * 150;
 
   // Inter-zombie separation. Was implemented as 1×1×1 soft AABB colliders in
   // the physics blocks list, but that triggered the wall-hit autojump path
@@ -240,16 +250,34 @@ export class NPCManager {
     // — Three.js silently skips that instance, looking like the zombie
     // "disappeared". Snap back to the player as a last resort. Cheap O(N)
     // scan, never fires in normal play.
+    //
+    // Also catches the runaway-drift case: any zombie that ended up beyond
+    // TELEPORT_RANGE_SQ from the player gets re-spawned in a fresh ring.
+    // This is the user's "horde all disappears at once" failure mode — once
+    // they pass beyond FREEZE_RANGE the per-zombie loop skips them, after
+    // which nothing brings them back. Teleport guarantees they stay in play.
     for (let i = 0; i < N; i++) {
       const z = this._zombies[i];
       const p = z.position;
-      if (Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)) continue;
-      p.set(player.x, player.y, player.z);
-      z.boundingBox.position.set(player.x, player.y + 16 / 16, player.z);
+      const finite = Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z);
+      const dx = p.x - player.x;
+      const dz = p.z - player.z;
+      const tooFar = finite && (dx * dx + dz * dz > NPCManager.TELEPORT_RANGE_SQ);
+      if (finite && !tooFar) continue;
+      const angle = Math.random() * Math.PI * 2;
+      const r = 8 + Math.random() * 2;
+      p.x = player.x + Math.cos(angle) * r;
+      p.y = player.y + 1;
+      p.z = player.z + Math.sin(angle) * r;
+      z.boundingBox.position.set(p.x, p.y + 1, p.z);
       z.physics.fallVel = -1;
       this._zombieStuckCount[i] = 0;
       this._zombieWanderFrames[i] = 0;
-      console.warn('[NPCManager] zombie position went non-finite, snapped to player');
+      if (!finite) {
+        console.warn('[NPCManager] zombie position went non-finite, snapped to player');
+      } else {
+        console.warn('[NPCManager] zombie drifted past teleport range, snapped to player');
+      }
     }
 
     // Pig — waypoint patrol
