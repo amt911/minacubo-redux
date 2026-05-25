@@ -65,7 +65,7 @@ Mejorar la gestión de chunks:
 
 ## Fase 4 — Features juego
 
-- [ ] Health/Damage Esteban con barra HUD
+- [x] Health/Damage Esteban con barra HUD
 - [ ] Save/Load chunks en IndexedDB (serializar bloques + seed)
 - [ ] Inventario real con contadores + hotkeys 1-9
 - [ ] Crafting grid 2x2 + tabla recetas JSON

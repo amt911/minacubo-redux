@@ -17,6 +17,7 @@ import { ChunkManager } from './ChunkManager.js'
 import { NPCManager } from './NPCManager.js'
 
 import { BLOCK_TYPES, blockMaterials, blockGeometries } from './BlockRegistry.js'
+import { HUD } from './HUD.js'
 import * as PM from './ParametrosMundo.js'
 import { identifyChunk } from './chunkMath.js'
 
@@ -168,13 +169,17 @@ class MyScene extends THREE.Scene {
       set: (v) => { this.input.selectedBlockIndex = v; },
     });
 
+    this.hud = new HUD();
+
     this.npcManager = new NPCManager({
-      zombie:           this.zombie,
-      pig:            this.pig,
-      pigWaypoints:     pigWaypoints,
-      chunkManager:     this.chunkManager,
+      zombie:            this.zombie,
+      pig:               this.pig,
+      pigWaypoints:      pigWaypoints,
+      chunkManager:      this.chunkManager,
       getPlayerPosition: () => this.model.position,
-      TAM_CHUNK:        this.TAM_CHUNK,
+      getPlayer:         () => this.model,
+      onPlayerDamaged:   () => this.hud.flashDamage(),
+      TAM_CHUNK:         this.TAM_CHUNK,
     });
 
     if (new URLSearchParams(location.search).has('bench')) {
@@ -698,7 +703,37 @@ class MyScene extends THREE.Scene {
     };
     graficos.add(resetTarget, 'reset').name('[ Reset ]');
 
+    // Gameplay controls
+    this._gameplayControls = { hordeSize: 5 };
+    const gameplay = gui.addFolder('Gameplay');
+    gameplay.add(this._gameplayControls, 'hordeSize', 1, 20, 1).name('Horde size');
+    gameplay.add({ spawn: () => this.spawnZombieHorde(this._gameplayControls.hordeSize) }, 'spawn')
+      .name('Spawn zombie horde');
+    gameplay.add({ heal: () => { this.model.health = this.model.maxHealth; } }, 'heal')
+      .name('Full heal');
+
     return gui;
+  }
+
+  /**
+   * Spawn `count` zombies in a ring around the player at 8–13 units radius.
+   * @param {number} count
+   */
+  spawnZombieHorde(count) {
+    const p = this.model.position;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4;
+      const r = 8 + Math.random() * 5;
+      const x = p.x + Math.cos(angle) * r;
+      const z = p.z + Math.sin(angle) * r;
+
+      const zombie = new Zombie(null, '');
+      this.enableShadowsOnSubtree(zombie);
+      zombie.position.set(x, p.y + 5, z);
+      zombie.boundingBox.position.set(x, p.y + 5 + 16 / PM.PIXELES_ESTANDAR, z);
+      this.add(zombie);
+      this.npcManager.addZombie(zombie);
+    }
   }
 
   setupPointerLock() {
@@ -1064,8 +1099,22 @@ class MyScene extends THREE.Scene {
       this.raycast.hideSelectionBox();
     }
 
+    // HUD — always update hearts so they reflect current health
+    this.hud.update(this.model.health, this.model.maxHealth);
+
     const blocks = this.chunkManager.getPlayerCollisions(this.model.position.x, this.model.position.z);
-    this.model.update(blocks, this.mapTeclas);
+    if (!this.model.isDead) {
+      this.model.update(blocks, this.mapTeclas);
+    }
+
+    // Death / respawn
+    if (this.model.isDead && !this.hud.gameOverShown) {
+      this.hud.showGameOver(() => {
+        const spawnX = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2;
+        const spawnZ = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2;
+        this.model.respawn(spawnX, 10, spawnZ);
+      });
+    }
 
     this.npcManager.update(delta);
     

@@ -234,6 +234,32 @@ class Player extends THREE.Object3D {
     this.physics=new C.Collisions(false, 0.8);
     this.canJump=true;
     this.height=32;
+
+    this.maxHealth = 20;
+    this.health = this.maxHealth;
+    this.isDead = false;
+  }
+
+  /**
+   * @param {number} amount HP to subtract (integer, each heart = 2 HP)
+   */
+  takeDamage(amount) {
+    if (this.isDead) return;
+    this.health = Math.max(0, this.health - amount);
+    if (this.health <= 0) this.isDead = true;
+  }
+
+  /**
+   * Reset to full health at the given world position.
+   * @param {number} x @param {number} y @param {number} z
+   */
+  respawn(x, y, z) {
+    this.health = this.maxHealth;
+    this.isDead = false;
+    this.clock.getDelta();            // drain accumulated dead-time
+    this.physics.fallVel = -1;        // kill fall velocity
+    this.position.set(x, y, z);
+    this.boundingBox.position.set(x, y + 16 / PM.PIXELES_ESTANDAR, z);
   }
 
   addCamara(camara) {
@@ -368,7 +394,22 @@ class Player extends THREE.Object3D {
 
 
     const worldDir = vectorDir.clone().applyQuaternion(this.quaternion);
+
+    // Capture pre-landing state for fall damage calculation
+    const prevFallVel = this.physics.fallVel;
+    const prevCanJump = this.canJump;
+
     this.physics.update(blocks, this, this.boundingBox, keysPressed, worldDir, speed);
+
+    // Fall damage: triggered on landing after significant fall.
+    // fallAcc = -42 → v² = 2 * 42 * h → h = v²/84.
+    // 3-block grace (Minecraft parity): first 3 blocks = no damage,
+    // each extra block = 2 HP (1 heart). Normal jump peaks ~1.2 blocks → safe.
+    if (!prevCanJump && this.canJump && prevFallVel < -15) {
+      const height = (prevFallVel * prevFallVel) / 84;
+      const damage = Math.floor(Math.max(0, height - 3)) * 2;
+      if (damage > 0) this.takeDamage(damage);
+    }
   }
 }
 

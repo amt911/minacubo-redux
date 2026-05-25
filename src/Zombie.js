@@ -241,21 +241,15 @@ class Zombie extends NPC {
 
 
   createGUI(gui, titleGui) {
-
     this.guiControls = {
-      moviendose: false,
+      moviendose: true,   // on by default — zombie chases without manual toggle
+      reset: () => { this.guiControls.moviendose = true; },
+    };
 
-      // reset button
-
-      reset: () => {
-        this.guiControls.moviendose = false;
-      }
-    }
+    // Horde zombies are created with gui=null to skip adding a folder per zombie.
+    if (!gui) return;
 
     const folder = gui.addFolder(titleGui);
-    // GUI sliders
-
-
     folder.add(this.guiControls, 'moviendose').name('Movimiento');
   }
 

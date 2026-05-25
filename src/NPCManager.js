@@ -9,39 +9,78 @@ export class NPCManager {
    *   pigWaypoints: Array<{x:number,y:number,z:number}>,
    *   chunkManager: import('./ChunkManager.js').ChunkManager,
    *   getPlayerPosition: () => {x:number,y:number,z:number},
+   *   getPlayer?: () => import('./Esteban.js').Player,
+   *   onPlayerDamaged?: () => void,
    *   TAM_CHUNK: number,
    * }} opts
    */
   constructor(opts) {
-    this._zombie            = opts.zombie;
-    this._pig             = opts.pig;
+    this._pig               = opts.pig;
     this._pigWaypoints      = opts.pigWaypoints;
     this._chunkManager      = opts.chunkManager;
     this._getPlayerPos      = opts.getPlayerPosition;
+    this._getPlayer         = opts.getPlayer ?? null;
+    this._onPlayerDamaged   = opts.onPlayerDamaged ?? (() => {});
     this._TAM_CHUNK         = opts.TAM_CHUNK;
 
     this._pigWaypointIndex  = 0;
     this._pigPauseTimer     = 200;
+
+    /** @type {import('./Zombie.js').Zombie[]} */
+    this._zombies = [opts.zombie];
+    /** @type {number[]} per-zombie melee cooldowns */
+    this._zombieAttackCooldowns = [0];
   }
 
   // 3x3 chunks around each NPC is plenty for collision detection.
   // Previously used DISTANCIA_RENDER (9) which scanned 9x9=81 chunks per NPC.
   static NPC_PHYSICS_RADIUS = 3;
 
+  // Zombie melee: within 1.5 units centre-to-centre, 2 HP every 1 s.
+  static ZOMBIE_ATTACK_RANGE = 1.5;
+  static ZOMBIE_ATTACK_DAMAGE = 2;
+  static ZOMBIE_ATTACK_COOLDOWN = 1.0; // seconds
+
+  /**
+   * Add a zombie to the managed pool (horde support).
+   * @param {import('./Zombie.js').Zombie} zombie
+   */
+  addZombie(zombie) {
+    this._zombies.push(zombie);
+    this._zombieAttackCooldowns.push(0);
+  }
+
   /**
    * @param {number} delta
    */
   update(delta) {
     const player = this._getPlayerPos();
+    const playerObj = this._getPlayer ? this._getPlayer() : null;
 
-    // Zombie — faces and chases player
-    this._zombie.cabezaW1.lookAt(player.x, player.y, player.z);
-    this._zombie.lookAt(player.x, this._zombie.position.y, player.z);
-    this._zombie.boundingBox.lookAt(player.x, this._zombie.boundingBox.position.y, player.z);
+    // All zombies — face, chase, and attack the player
+    for (let i = 0; i < this._zombies.length; i++) {
+      const z = this._zombies[i];
 
-    const zombieChunk = identifyChunk(this._zombie.position.x, this._zombie.position.z, this._TAM_CHUNK);
-    const zombieCollisions = this._chunkManager.getCollisionsAround(zombieChunk, NPCManager.NPC_PHYSICS_RADIUS);
-    this._zombie.update(zombieCollisions);
+      z.cabezaW1.lookAt(player.x, player.y, player.z);
+      z.lookAt(player.x, z.position.y, player.z);
+      z.boundingBox.lookAt(player.x, z.boundingBox.position.y, player.z);
+
+      // Melee attack — skip when player is already dead
+      this._zombieAttackCooldowns[i] -= delta;
+      if (playerObj && !playerObj.isDead && this._zombieAttackCooldowns[i] <= 0) {
+        const dx = z.position.x - player.x;
+        const dz = z.position.z - player.z;
+        if (dx * dx + dz * dz <= NPCManager.ZOMBIE_ATTACK_RANGE ** 2) {
+          playerObj.takeDamage(NPCManager.ZOMBIE_ATTACK_DAMAGE);
+          this._onPlayerDamaged();
+          this._zombieAttackCooldowns[i] = NPCManager.ZOMBIE_ATTACK_COOLDOWN;
+        }
+      }
+
+      const zChunk = identifyChunk(z.position.x, z.position.z, this._TAM_CHUNK);
+      const zCols = this._chunkManager.getCollisionsAround(zChunk, NPCManager.NPC_PHYSICS_RADIUS);
+      z.update(zCols);
+    }
 
     // Pig — waypoint patrol
     const wp = this._pigWaypoints[this._pigWaypointIndex];

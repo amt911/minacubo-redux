@@ -6,7 +6,7 @@ Run `/graphify` before each session. The graph at `graphify-out/graph.json` maps
 
 ## ⚡ graphify — use every session
 
-```
+```sh
 /graphify            # first run (builds graph)
 /graphify --update   # incremental (after changes)
 /graphify query "<pregunta>"    # architecture questions
@@ -100,3 +100,4 @@ Don't TDD rendering code or Three.js scene construction — not testable without
 - **`PIXELES_ESTANDAR` is 16** — all size calculations derive from this. Don't hardcode `16` without referencing `PM.PIXELES_ESTANDAR`.
 - **Chunk rebuild is expensive** — don't trigger `renderChunksAgain` unnecessarily. Block add/remove already rebuilds only the affected material mesh.
 - **`estaColindando` / `estaEnArbol`** are O(n) scans on small lists — fine for current chunk sizes, but mark if chunk size grows significantly.
+- **Run bench after every feature** — `node scripts/bench.mjs --runs 3 --DR 12` after any non-trivial implementation. Headless SwiftShader gives noisy run 1; the median of 3 is reliable. Report fps_avg + build_avg_ms and flag if fps_avg drops >10% or build_avg_ms rises >0.2ms vs baseline (0.72ms). Bench cmd: `node scripts/bench.mjs --runs 3 --DR 12 2>&1 | tail -25`
