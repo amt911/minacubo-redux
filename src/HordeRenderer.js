@@ -98,25 +98,32 @@ export class HordeRenderer {
   update() {
     const zs = this._zombies;
     if (zs.length === 0) return;
+    const cabeza  = this._meshes.cabeza;
+    const brazoL  = this._meshes.brazoL;
+    const brazoR  = this._meshes.brazoR;
+    const piernaL = this._meshes.piernaL;
+    const piernaR = this._meshes.piernaR;
+    const torso   = this._meshes.torso;
     for (let i = 0; i < zs.length; i++) {
       const z = zs[i];
-      // Force a full subtree refresh — invisible meshes wouldn't get their
-      // matrixWorld updated by the auto-pass alone in some Three.js versions.
-      z.updateMatrixWorld(true);
+      // (false) — only re-compose matrices where the dirty flag (set by
+      // Object3D.updateMatrix when position/rotation change) demands it.
+      // (true) was wasting work re-multiplying every parent matrix per zombie.
+      z.updateMatrixWorld(false);
       const p = /** @type {any} */ (z)._parts;
-      this._meshes.cabeza .setMatrixAt(i, p.cabeza.matrixWorld);
-      this._meshes.brazoL .setMatrixAt(i, p.brazoL.matrixWorld);
-      this._meshes.brazoR .setMatrixAt(i, p.brazoR.matrixWorld);
-      this._meshes.piernaL.setMatrixAt(i, p.piernaL.matrixWorld);
-      this._meshes.piernaR.setMatrixAt(i, p.piernaR.matrixWorld);
-      this._meshes.torso  .setMatrixAt(i, p.torso.matrixWorld);
+      cabeza .setMatrixAt(i, p.cabeza.matrixWorld);
+      brazoL .setMatrixAt(i, p.brazoL.matrixWorld);
+      brazoR .setMatrixAt(i, p.brazoR.matrixWorld);
+      piernaL.setMatrixAt(i, p.piernaL.matrixWorld);
+      piernaR.setMatrixAt(i, p.piernaR.matrixWorld);
+      torso  .setMatrixAt(i, p.torso.matrixWorld);
     }
-    this._meshes.cabeza .instanceMatrix.needsUpdate = true;
-    this._meshes.brazoL .instanceMatrix.needsUpdate = true;
-    this._meshes.brazoR .instanceMatrix.needsUpdate = true;
-    this._meshes.piernaL.instanceMatrix.needsUpdate = true;
-    this._meshes.piernaR.instanceMatrix.needsUpdate = true;
-    this._meshes.torso  .instanceMatrix.needsUpdate = true;
+    cabeza .instanceMatrix.needsUpdate = true;
+    brazoL .instanceMatrix.needsUpdate = true;
+    brazoR .instanceMatrix.needsUpdate = true;
+    piernaL.instanceMatrix.needsUpdate = true;
+    piernaR.instanceMatrix.needsUpdate = true;
+    torso  .instanceMatrix.needsUpdate = true;
   }
 
   /** Enable/disable shadow casting for the whole horde. */

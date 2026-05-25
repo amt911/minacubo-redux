@@ -75,6 +75,15 @@ export class NPCManager {
   static SHADOW_RANGE_SQ = 32 * 32;
   static FREEZE_RANGE_SQ = 60 * 60;
 
+  // Inter-zombie separation. Was implemented as 1×1×1 soft AABB colliders in
+  // the physics blocks list, but that triggered the wall-hit autojump path
+  // when zombies overlapped (autojump fires on hitWallX/Z) — symptom was
+  // zombies launching straight up off each other. Post-physics pairwise
+  // separation pushes them apart horizontally only, no autojump bait, no
+  // contribution to the per-zombie collision N×blocks workload.
+  static SEPARATION_DIST = 0.8;
+  static SEPARATION_DIST_SQ = 0.8 * 0.8;
+
   /**
    * @param {number} delta
    */
@@ -82,20 +91,9 @@ export class NPCManager {
     const player = this._getPlayerPos();
     const playerObj = this._getPlayer ? this._getPlayer() : null;
 
-    // Pre-build the zombie soft-collider snapshot once per frame, reusing a
-    // pool of objects. Pre-pool each per-zombie loop did
-    //   zCols.slice() + (N-1) push({x,y,z,material:''})
-    // — for a 20-zombie horde that's 380 fresh objects + 20 array copies
-    // every frame, classic GC stutter material.
-    if (!this._softPool) this._softPool = [];
-    while (this._softPool.length < this._zombies.length) {
-      this._softPool.push({ x: 0, y: 0, z: 0, material: '' });
-    }
-    const softs = this._softPool;
-    for (let i = 0; i < this._zombies.length; i++) {
-      const o = this._zombies[i].boundingBox.position;
-      softs[i].x = o.x; softs[i].y = o.y; softs[i].z = o.z;
-    }
+    // (Inter-zombie separation now happens post-physics, see end of this
+    // method. The soft-AABB-collider approach was causing zombies to autojump
+    // off each other and launch into the air.)
 
     // All zombies — face, chase (with detour if stuck), and attack the player
     for (let i = 0; i < this._zombies.length; i++) {
@@ -145,13 +143,22 @@ export class NPCManager {
       }
 
       const zChunk = identifyChunk(z.position.x, z.position.z, this._TAM_CHUNK);
-      // getCollisionsAround returns a fresh array — own it, push soft
-      // colliders directly instead of slicing.
+      // getCollisionsAround returns a fresh array with ~1000 entries for
+      // 3×3 chunks. Most blocks are far above or below the zombie's 2-unit
+      // height and irrelevant to its physics step. Drop them in-place to
+      // shrink the resolveMovement inner loop — ~80% of blocks filtered out
+      // in typical terrain (a column averages 6-10 blocks tall but the
+      // zombie only intersects 2 of them).
       const blocks = this._chunkManager.getCollisionsAround(zChunk, NPCManager.NPC_PHYSICS_RADIUS);
-      for (let j = 0; j < softs.length; j++) {
-        if (j === i) continue;
-        blocks.push(softs[j]);
+      const zy = z.position.y;
+      const yMin = zy - 1.5;
+      const yMax = zy + 3;
+      let w = 0;
+      for (let r = 0; r < blocks.length; r++) {
+        const b = blocks[r];
+        if (b.y >= yMin && b.y <= yMax) blocks[w++] = b;
       }
+      blocks.length = w;
 
       // Stuck detection: capture pre-update position, compare post-update.
       const preX = z.position.x;
@@ -174,6 +181,31 @@ export class NPCManager {
         }
       } else {
         this._zombieStuckCount[i] = 0;
+      }
+    }
+
+    // Pairwise inter-zombie separation. Horizontal-only push (Y untouched)
+    // so it can't trigger jumps or fall through floors. O(N²) but N≤~30 in
+    // practice and the inner body is 5 multiplies + a sqrt — completes in
+    // microseconds for a 20-zombie horde.
+    const MIN = NPCManager.SEPARATION_DIST;
+    const MIN_SQ = NPCManager.SEPARATION_DIST_SQ;
+    for (let i = 0; i < this._zombies.length; i++) {
+      const a = this._zombies[i];
+      for (let j = i + 1; j < this._zombies.length; j++) {
+        const b = this._zombies[j];
+        const dx = a.position.x - b.position.x;
+        const dz = a.position.z - b.position.z;
+        const dSq = dx * dx + dz * dz;
+        if (dSq >= MIN_SQ || dSq < 1e-6) continue;
+        const dist = Math.sqrt(dSq);
+        const push = (MIN - dist) * 0.5;
+        const nx = dx / dist;
+        const nz = dz / dist;
+        a.position.x += nx * push; a.position.z += nz * push;
+        a.boundingBox.position.x += nx * push; a.boundingBox.position.z += nz * push;
+        b.position.x -= nx * push; b.position.z -= nz * push;
+        b.boundingBox.position.x -= nx * push; b.boundingBox.position.z -= nz * push;
       }
     }
 
