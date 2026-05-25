@@ -266,9 +266,11 @@ export class ChunkManager {
         if (prev === undefined || b.y > prev.y) tops.set(colKey, b);
       }
       // Coalesce to one material so each ULTRAFAR chunk = 1 draw call.
+      // Material key is the English BlockRegistry name ('Grass'), not the
+      // legacy Spanish one — codebase migrated in Fase 3.
       const farBlocks = [];
       for (const b of tops.values()) {
-        farBlocks.push({ x: b.x, y: b.y, z: b.z, material: 'Hierba' });
+        farBlocks.push({ x: b.x, y: b.y, z: b.z, material: 'Grass' });
       }
       blocksToMesh = farBlocks;
     } else if (lod === 'FAR') {
