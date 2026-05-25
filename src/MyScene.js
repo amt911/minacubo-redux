@@ -474,65 +474,96 @@ class MyScene extends THREE.Scene {
       renderDistance: MyScene._loadRenderDistance(),
     }
 
+    // Hard-coded factory defaults — used by Graphics > [ Reset ] button.
+    // Excludes `renderDistance` because changing it triggers location.reload()
+    // (jarring on a click meant to just restore visual defaults) — DR reset
+    // is opt-in via the slider.
+    /** @type {Record<string, any>} */
+    this._guiDefaults = {
+      axisOnOff: true,
+      activarWireframe: true,
+      shadowsEnabled: true,
+      shadowResolution: 1024,
+      shadowExtent: 32,
+      shadowRefreshFrames: 3,
+      shadowCasterRange: 3,
+      cameraSensitivity: 1.0,
+    };
+
     const folder = gui.addFolder('Ayudas');
 
     folder.add(this.guiControls, 'axisOnOff')
       .name('Mostrar ejes : ')
+      .listen()
       .onChange((value) => this.setAxisVisible(value));
 
     folder.add(this.guiControls, 'activarWireframe')
-      .name('Mostrar feedback (raycast a 10Hz)');
+      .name('Mostrar feedback (raycast a 10Hz)')
+      .listen();
 
     const graficos = gui.addFolder('Graphics');
 
+    // Side-effect helpers: factored out so the [ Reset ] button can re-apply
+    // each setting without duplicating the onChange bodies.
+    const applyShadowsEnabled = (v) => {
+      this.renderer.shadowMap.enabled = v;
+      this.sunLight.castShadow = v;
+      if (this.sunLight.shadow.map) {
+        this.sunLight.shadow.map.dispose();
+        this.sunLight.shadow.map = null;
+      }
+      this.renderer.shadowMap.needsUpdate = true;
+    };
+    const applyShadowResolution = (v) => {
+      this.sunLight.shadow.mapSize.set(v, v);
+      if (this.sunLight.shadow.map) {
+        this.sunLight.shadow.map.dispose();
+        this.sunLight.shadow.map = null;
+      }
+    };
+    const applyShadowExtent = (v) => {
+      const cam = this.sunLight.shadow.camera;
+      cam.left = -v; cam.right = v; cam.top = v; cam.bottom = -v;
+      cam.updateProjectionMatrix();
+      this.renderer.shadowMap.needsUpdate = true;
+    };
+    const applyShadowCasterRange = () => {
+      this.chunkManager.updateShadowCastersByDistance(
+        this.model.position.x,
+        this.model.position.z,
+        this.guiControls.shadowCasterRange,
+      );
+    };
+
     graficos.add(this.guiControls, 'shadowsEnabled')
       .name('Sombras')
-      .onChange((v) => {
-        this.renderer.shadowMap.enabled = v;
-        this.sunLight.castShadow = v;
-        if (this.sunLight.shadow.map) {
-          this.sunLight.shadow.map.dispose();
-          this.sunLight.shadow.map = null;
-        }
-        this.renderer.shadowMap.needsUpdate = true;
-      });
+      .listen()
+      .onChange(applyShadowsEnabled);
 
     graficos.add(this.guiControls, 'shadowResolution', { '512': 512, '1024': 1024, '2048': 2048, '4096': 4096 })
       .name('Shadow resolution')
-      .onChange((v) => {
-        this.sunLight.shadow.mapSize.set(v, v);
-        if (this.sunLight.shadow.map) {
-          this.sunLight.shadow.map.dispose();
-          this.sunLight.shadow.map = null;
-        }
-      });
+      .listen()
+      .onChange(applyShadowResolution);
 
     graficos.add(this.guiControls, 'shadowExtent', 8, 96, 1)
       .name('Shadow extent (units)')
-      .onChange((v) => {
-        const cam = this.sunLight.shadow.camera;
-        cam.left = -v; cam.right = v; cam.top = v; cam.bottom = -v;
-        cam.updateProjectionMatrix();
-        this.renderer.shadowMap.needsUpdate = true;
-      });
+      .listen()
+      .onChange(applyShadowExtent);
 
     graficos.add(this.guiControls, 'shadowRefreshFrames', 1, 10, 1)
-      .name('Shadow refresh frames');
+      .name('Shadow refresh frames')
+      .listen();
 
     graficos.add(this.guiControls, 'shadowCasterRange', 0, 8, 1)
       .name('Shadow caster radius (chunks)')
-      .onChange(() => {
-        // Re-apply castShadow on existing meshes immediately so the slider
-        // feels responsive instead of waiting for the 30-frame cull tick.
-        this.chunkManager.updateShadowCastersByDistance(
-          this.model.position.x,
-          this.model.position.z,
-          this.guiControls.shadowCasterRange,
-        );
-      });
+      .listen()
+      // Re-apply castShadow on existing meshes immediately so the slider
+      // feels responsive instead of waiting for the 30-frame cull tick.
+      .onChange(applyShadowCasterRange);
 
     graficos.add(this.guiControls, 'cameraSensitivity', 0.1, 3.0, 0.05)
-      .name('Camera sensitivity');
+      .name('Camera sensitivity')
+      .listen();
 
     graficos.add(this.guiControls, 'renderDistance', 3, 64, 1)
       .name('Render distance (reloads)')
@@ -540,6 +571,22 @@ class MyScene extends THREE.Scene {
         try { localStorage.setItem('renderDistance', String(v)); } catch { /* ignore */ }
         location.reload();
       });
+
+    // Reset button — restores every guiControls field listed in _guiDefaults
+    // and re-runs each setting's side-effect so the change takes effect
+    // without waiting for the next 30-frame cull tick. Slider displays
+    // update because each controller above is .listen()'d.
+    const resetTarget = {
+      reset: () => {
+        Object.assign(this.guiControls, this._guiDefaults);
+        applyShadowsEnabled(this.guiControls.shadowsEnabled);
+        applyShadowResolution(this.guiControls.shadowResolution);
+        applyShadowExtent(this.guiControls.shadowExtent);
+        applyShadowCasterRange();
+        this.setAxisVisible(this.guiControls.axisOnOff);
+      },
+    };
+    graficos.add(resetTarget, 'reset').name('[ Reset ]');
 
     return gui;
   }
