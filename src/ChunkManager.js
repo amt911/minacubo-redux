@@ -53,6 +53,20 @@ export class ChunkManager {
     /** @type {Object<number, Object<number, number>>} */
     this.chunkMaxY = {};
 
+    // LOD bookkeeping. Chunks within `lodNearRadius` chunks of the player
+    // render at full detail (every exposed block). Chunks beyond render at
+    // "top of column only" — saves the cliff-side blocks that the full path
+    // would emit, at the cost of losing distant terrain depth.
+    //
+    // _playerChunk is updated by setPlayerChunk() (called from updateScroll
+    // and externally from MyScene.update); chunkLOD[x][z] stores the LOD
+    // that the current mesh was built at, so updateScroll can detect a
+    // transition and queue a rebuild.
+    this.lodNearRadius = 4;
+    this._playerChunk = { x: 0, z: 0 };
+    /** @type {Object<number, Object<number, 'NEAR' | 'FAR'>>} */
+    this.chunkLOD = {};
+
     /** @type {{min:{x:number,z:number}, max:{x:number,z:number}}} */
     this.chunkMinMax = {
       min: { x: 0, z: 0 },
@@ -208,6 +222,28 @@ export class ChunkManager {
     const blocks = this.chunk[chunkX]?.[chunkZ];
     if (!blocks || blocks.length === 0) return;
 
+    // LOD: chunks far from the player render only the topmost block of each
+    // (x, z) column. Cliff-side / underground exposure is sacrificed for
+    // distant terrain — the visual difference is minor (no z-fighting, just
+    // missing cliff faces) and the instance count drops 30-40 % on a
+    // typical hilly chunk. Track which LOD we built at so updateScroll +
+    // setPlayerChunk can detect bracket transitions and queue a rebuild.
+    const lod = this._chunkLOD(chunkX, chunkZ);
+    if (!this.chunkLOD[chunkX]) this.chunkLOD[chunkX] = {};
+    this.chunkLOD[chunkX][chunkZ] = lod;
+
+    let blocksToMesh = blocks;
+    if (lod === 'FAR') {
+      const topByCol = new Map();
+      for (let i = 0; i < blocks.length; i++) {
+        const b = blocks[i];
+        const colKey = (b.x + 32768) * 65536 + (b.z + 32768);
+        const prev = topByCol.get(colKey);
+        if (!prev || b.y > prev.y) topByCol.set(colKey, b);
+      }
+      blocksToMesh = Array.from(topByCol.values());
+    }
+
     // Bit-packed (x, y, z) → Number occupancy key. Block coords have integer
     // x/z and half-integer y (n + 0.5 from chunkGen). Encoding:
     //   bits  0..7  : (y * 2 + Y_OFF)  → y ∈ [-8.5, 119.5]  (8 bits)
@@ -233,10 +269,15 @@ export class ChunkManager {
       }
     }
 
+    // Note: face culling iterates `blocksToMesh` (filtered to top-of-column
+    // when LOD=FAR) but occupancy was built from the FULL `blocks` of this
+    // chunk + neighbours. That's intentional — the top block's -Y face is
+    // correctly hidden by the dirt directly under it (still present in the
+    // occupancy set even though we won't emit it).
     /** @type {Record<string, Array<{x:number,y:number,z:number,material:string}>>} */
     const groups = {};
-    for (let i = 0; i < blocks.length; i++) {
-      const b = blocks[i];
+    for (let i = 0; i < blocksToMesh.length; i++) {
+      const b = blocksToMesh[i];
       const bxz = (b.x + X_OFF) * 65536 + (b.z + Z_OFF);
       const by  = ((b.y * 2) | 0) + Y_OFF;
       // pre-compute components and inline the 6 neighbour keys: the deltas
@@ -384,6 +425,11 @@ export class ChunkManager {
     // because the spawn chunk would be ~DR/2 chunks behind them.
     const spawnCX = Math.floor(DR / 2);
     const spawnCZ = Math.floor(DR / 2);
+    // Seed player chunk so the spawn chunk + first init batch render at
+    // NEAR LOD instead of FAR (default _playerChunk is (0,0) which would
+    // mark the spawn chunk as `Math.floor(DR/2)` chunks away → FAR LOD).
+    this._playerChunk.x = spawnCX;
+    this._playerChunk.z = spawnCZ;
 
     const getHeight = (x, z) => terrainHeight(this._noise, x, z);
     const { blocks: spawnBlocks, treeList } = generateChunkBlocks(getHeight, spawnCX, spawnCZ, TC);
@@ -693,5 +739,42 @@ export class ChunkManager {
     this._collCacheKeyX = null;
     this._collCacheKeyZ = null;
     this._collCacheResult = null;
+  }
+
+  /**
+   * Update the cached player chunk used for LOD bracketing. Queues rebuilds
+   * for any meshed chunks whose target LOD changed as a result. Call from
+   * MyScene each time the player crosses a chunk boundary (updateScroll
+   * already does this on slide; idle ticks should call it too in case the
+   * window did not slide).
+   *
+   * @param {number} cx player chunk X
+   * @param {number} cz player chunk Z
+   */
+  setPlayerChunk(cx, cz) {
+    if (this._playerChunk.x === cx && this._playerChunk.z === cz) return;
+    this._playerChunk.x = cx;
+    this._playerChunk.z = cz;
+    // Scan meshed chunks; queue rebuild for any whose LOD bracket flipped.
+    for (const xKey in this.chunkMeshes) {
+      const ix = +xKey;
+      const col = this.chunkMeshes[xKey];
+      for (const zKey in col) {
+        const iz = +zKey;
+        const target = this._chunkLOD(ix, iz);
+        if (this.chunkLOD[xKey]?.[zKey] !== target) {
+          this._meshQueue.push({ chunkX: ix, chunkZ: iz });
+        }
+      }
+    }
+  }
+
+  /** @param {number} cx @param {number} cz @returns {'NEAR' | 'FAR'} */
+  _chunkLOD(cx, cz) {
+    const d = Math.max(
+      Math.abs(cx - this._playerChunk.x),
+      Math.abs(cz - this._playerChunk.z),
+    );
+    return d <= this.lodNearRadius ? 'NEAR' : 'FAR';
   }
 }

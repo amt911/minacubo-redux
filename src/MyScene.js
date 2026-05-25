@@ -916,6 +916,12 @@ class MyScene extends THREE.Scene {
     this.renderer.render(this, this.getCamera());
 
     this.chunkManager.updateScroll(this.model.position.x, this.model.position.z);
+    // Keep the LOD bracketer in sync with the player chunk. setPlayerChunk
+    // early-returns when the chunk hasn't changed, so this is ~free; when
+    // the player crosses a chunk boundary it queues rebuilds for any
+    // already-meshed chunks whose LOD flipped.
+    const pc = identifyChunk(this.model.position.x, this.model.position.z, this.TAM_CHUNK);
+    this.chunkManager.setPlayerChunk(pc.x, pc.z);
     // Drain a few queued mesh builds (worker results land here).
     this.chunkManager.tick();
 
