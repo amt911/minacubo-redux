@@ -1076,12 +1076,13 @@ class MyScene extends THREE.Scene {
       this.chunkManager.updateUndergroundCull(this.model.position.y);
     }
 
-    // Free block data for chunks far outside the visible window every ~5 s.
-    // Memory used to grow unbounded as the player explored — each chunk's
-    // block list (~1500 objects ≈ 150 KB) was kept forever even after the
-    // mesh disposed. Worker re-gens from seed on return; terrain is
-    // deterministic so the player sees no difference.
-    if (this._shadowFrame % 300 === 0) {
+    // Eviction runs every 60 frames (~1 s) instead of every 300. Was missing
+    // the leak from worker-late chunk arrivals + stale mesh builds — by the
+    // time eviction ran, _meshQueue had built thousands of chunks beyond the
+    // visible window. With the queue filters in ChunkManager.tick +
+    // _genChunkAsync resolution this is double-insurance, but cheap (the
+    // eviction loop is O(chunks) of bookkeeping, no GPU work).
+    if (this._shadowFrame % 60 === 0) {
       this.chunkManager.evictDistantChunkData(this.DISTANCIA_RENDER + 4);
     }
 

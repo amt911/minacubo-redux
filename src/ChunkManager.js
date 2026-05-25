@@ -552,15 +552,21 @@ export class ChunkManager {
 
     // Time-budget the mesh builds so we don't blow a frame even with a deep
     // backlog. ~6ms leaves headroom for the rest of the frame at 60 FPS.
-    // No window-bound filter here: a chunk that's already meshed will be
-    // disposed by updateScroll() if it's outside the visible range — but
-    // silently dropping a queued build leaves a chunk with data and no
-    // mesh, which is exactly what produces the "chunk pops in when you
-    // walk past it" bug.
+    //
+    // Window-bound filter: when the player moves fast across multiple chunks,
+    // updateScroll() queues a build for every chunk that comes into the
+    // window, then queues the OLD ones for dispose when the window slides
+    // again. Without this filter we'd happily build a chunk that's already
+    // 30 chunks behind the player — costs a build, costs a dispose, and in
+    // the meantime that mesh is alive in chunkMeshes inflating the chunk
+    // count (observed: 5000+ chunks tracked at DR=12, expected ~625).
+    const R = ChunkManager.PRELOAD_RING;
     const start = performance.now();
     while (this._meshQueue.length > 0 && performance.now() - start < 6) {
       const { chunkX, chunkZ } = this._meshQueue.shift();
       if (this.chunkMeshes[chunkX]?.[chunkZ]) continue;
+      if (chunkX < min.x - R || chunkX > max.x + R ||
+          chunkZ < min.z - R || chunkZ > max.z + R) continue;
       this._buildChunkMesh(chunkX, chunkZ);
     }
   }
@@ -620,6 +626,14 @@ export class ChunkManager {
           this._meshQueue.push({ chunkX: i, chunkZ: a });
         } else {
           this._genChunkAsync(i, a).then((blocks) => {
+            // The worker may resolve long after the player has scrolled past.
+            // Drop the result if the chunk is no longer inside the current
+            // window+ring — otherwise it'd be stored and immediately queued
+            // for eviction, wasting both the build and the dispose budget.
+            const cur = this.chunkMinMax;
+            const Rr = ChunkManager.PRELOAD_RING;
+            if (i < cur.min.x - Rr || i > cur.max.x + Rr ||
+                a < cur.min.z - Rr || a > cur.max.z + Rr) return;
             this._storeChunkData(i, a, blocks);
             this._meshQueue.push({ chunkX: i, chunkZ: a });
           });
@@ -796,6 +810,28 @@ export class ChunkManager {
     const pcx = this._playerChunk.x;
     const pcz = this._playerChunk.z;
     let dropped = 0;
+    // Pass 1: queue mesh disposal for chunks beyond the data radius. The
+    // scroll-time dispose path only covers chunks that crossed the window
+    // boundary on the current frame; a chunk dropped into the queue by an
+    // earlier scroll but never picked up (queue starvation) would otherwise
+    // live forever. Sweeping the full chunkMeshes map per eviction cycle
+    // catches those strays.
+    for (const xKey in this.chunkMeshes) {
+      const ix = +xKey;
+      if (Math.abs(ix - pcx) <= dataRadius) continue;
+      const col = this.chunkMeshes[xKey];
+      for (const zKey in col) {
+        this._disposeQueue.push([ix, +zKey]);
+      }
+    }
+    for (const xKey in this.chunkMeshes) {
+      const ix = +xKey;
+      if (Math.abs(ix - pcx) > dataRadius) continue;
+      const col = this.chunkMeshes[xKey];
+      for (const zKey in col) {
+        if (Math.abs(+zKey - pcz) > dataRadius) this._disposeQueue.push([ix, +zKey]);
+      }
+    }
     for (const xKey in this.chunk) {
       const ix = +xKey;
       const col = this.chunk[xKey];
