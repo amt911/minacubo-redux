@@ -103,17 +103,36 @@ Mejorar la gestión de chunks:
 - [x] Skip raycast feedback cuando idle (interval 100ms→500ms sin keys + sin pointer-lock)
 - [x] chunkCollision leak fixed (replaced array con counter monotónico)
 - [x] Drop dead allMeshes Array + cleanup empty chunkMeshes[xKey] tras dispose
-- [ ] **Per-face culling rechazado sin atlas+greedy** — instance overhead > triangle savings. Reintentar tras texture atlas.
-- [ ] Greedy meshing (bloques contiguos misma cara → quad único, ~10× drop) — requiere atlas
-- [ ] Texture atlas (precondition for greedy meshing + reduces material switches)
-- [ ] LOD chunks lejanos (geometría simplificada)
-- [ ] Optional CSM (cascaded shadow maps) for sharper near + cheaper far shadows
-- [ ] Cull underground when player Y is above terrain top (mesh.visible=false para Stone/Dirt/Rock cuando playerY > top)
-- [ ] Octree / grid spatial index for raycasts (getMeshesNear ya mitiga; relevante si DR sube mucho)
-- [ ] Move mesh-build occupancy set + grouping to web worker too (occupancy Set + grouping cost main thread)
-- [ ] Pre-allocate InstancedMesh capacity (block break/place no requiere realloc + redispatch matriz completa)
-- [ ] Rebuild chunk mesh on neighbor load (overdraw boundary actualmente — face culling stale)
-- [ ] PR comment con tabla diff (workflow_dispatch "promote" para actualizar bench/baseline.json)
+- [x] Rebuild chunk mesh on cardinal neighbour load (face culling refreshes en boundary)
+- [x] Worker pool dinámico (`hardwareConcurrency - 2`, cap [2..8]) en lugar de fijo 4
+- [x] Underground bulk cull (Stone/Dirt/Rock hidden cuando playerY > chunkMaxY + 10)
+- [x] raycaster.far = 20 en RaycastInteraction (short-circuit per-triangle tests más allá)
+- [x] Shadow map needsUpdate cada 6 frames en vez de 3 (sun mueve lento, ~100ms lag invisible)
+
+**Cumulative bench impact (initial → final, headless software GL, DR=12):**
+- fps_avg `3.41 → 5.06` **(+48%)**
+- frame_avg_ms `293 → 198` **(-32%)**
+- max_calls `329 → 151` **(-54%)**
+- max_tris `197k → 113k` **(-43%)**
+- build_avg_ms `4.94 → 0.81` **(-84%)**
+
+### Pendiente (orden ROI estimado, todo refactor grande)
+
+- [ ] **Texture atlas + greedy meshing** (multi-step pero win gigante; bloquea per-face culling útil)
+- [ ] **LOD chunks distantes** (FAR ring emite solo top de columna, requiere tracker `chunkLOD[x][z]` + rebuild on bracket transition en updateScroll)
+- [ ] **Move mesh-build occupancy + grouping a worker** (offload main thread; complica plumbing porque worker necesita 3×3 chunk data o SharedArrayBuffer)
+- [ ] **Pre-allocate InstancedMesh capacity** (block break/place rebuilea chunk entero hoy; pre-alloc + count bump = edit barato)
+- [ ] **Per-face culling** (reintentar tras atlas+greedy; sin atlas hace instance overhead > savings)
+- [ ] **CSM (cascaded shadow maps)** (sombras nítidas cerca + baratas lejos; Three.js addon disponible)
+- [ ] **Octree / grid spatial index para raycast** (getMeshesNear ya mitiga; sólo relevante si DR sube ≥30 o features tipo arrows trazadoras)
+- [ ] Front-to-back depth pre-pass (eliminar overdraw fragment cost para terrain complejo)
+- [ ] Web worker para terrain noise generation parallelization (ya en worker, pero podrían generar región pre-emptive)
+- [ ] Compressed textures (KTX2 + Basis Universal) — menos VRAM, faster sampling
+- [ ] Frustum & occlusion query (WebGL2 BeginQuery EXT_disjoint_timer_query) para sólo dibujar chunks no ocluidos
+- [ ] DR adaptativo: si fps < 30, bajar DR temporalmente; si > 55, subir
+- [ ] OffscreenCanvas: render en worker (Chrome/Firefox support, no Safari aún)
+- [ ] Material/shader instancing: GrassSide+GrassTop+GrassBottom como sub-mesh con custom shader que sample texture por face → un solo material por block type
+- [ ] **PR comment con tabla diff** (workflow_dispatch "promote" para actualizar bench/baseline.json automáticamente)
 
 ## Fase 6 — Ambicioso
 
