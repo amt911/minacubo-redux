@@ -806,27 +806,29 @@ export class ChunkManager {
     const pcx = this._playerChunk.x;
     const pcz = this._playerChunk.z;
     let dropped = 0;
-    // Pass 1: queue mesh disposal for chunks beyond the data radius. The
-    // scroll-time dispose path only covers chunks that crossed the window
-    // boundary on the current frame; a chunk dropped into the queue by an
-    // earlier scroll but never picked up (queue starvation) would otherwise
-    // live forever. Sweeping the full chunkMeshes map per eviction cycle
-    // catches those strays.
+    // Synchronous mesh disposal pass. Previously this used the deferred
+    // _disposeQueue, but the 2 ms/frame drain budget couldn't keep up when
+    // eviction had 1000s of chunks to clear (observed: 4951 chunks tracked
+    // after a few minutes of running, ~10000 meshes). Each subsequent
+    // eviction cycle re-queued the same still-alive entries, so the queue
+    // grew unbounded and chunkMeshes never shrank.
+    //
+    // Doing it synchronously costs one hitch per eviction tick (~once per
+    // second) instead of dribbling forever. Collect keys first so the
+    // _disposeChunkMesh mutation of chunkMeshes doesn't perturb iteration.
+    const toDispose = [];
     for (const xKey in this.chunkMeshes) {
       const ix = +xKey;
-      if (Math.abs(ix - pcx) <= dataRadius) continue;
       const col = this.chunkMeshes[xKey];
+      const xOut = Math.abs(ix - pcx) > dataRadius;
       for (const zKey in col) {
-        this._disposeQueue.push([ix, +zKey]);
+        if (xOut || Math.abs(+zKey - pcz) > dataRadius) {
+          toDispose.push(ix, +zKey);
+        }
       }
     }
-    for (const xKey in this.chunkMeshes) {
-      const ix = +xKey;
-      if (Math.abs(ix - pcx) > dataRadius) continue;
-      const col = this.chunkMeshes[xKey];
-      for (const zKey in col) {
-        if (Math.abs(+zKey - pcz) > dataRadius) this._disposeQueue.push([ix, +zKey]);
-      }
+    for (let i = 0; i < toDispose.length; i += 2) {
+      this._disposeChunkMesh(toDispose[i], toDispose[i + 1]);
     }
     for (const xKey in this.chunk) {
       const ix = +xKey;

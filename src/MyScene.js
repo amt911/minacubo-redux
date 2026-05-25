@@ -380,6 +380,7 @@ class MyScene extends THREE.Scene {
 
     const chunkCount = this.chunkManager.chunkCount;
     const queueLen = this.chunkManager._meshQueue.length;
+    const disposeLen = this.chunkManager._disposeQueue.length;
     const pendingGens = this.chunkManager._pendingGens.size;
     const buildAvg = this.chunkManager._buildTimeAvgMs;
     const lodR = this.chunkManager.lodNearRadius;
@@ -392,6 +393,7 @@ class MyScene extends THREE.Scene {
       `instances ${instances.toLocaleString()}\n` +
       `chunks    ${chunkCount}\n` +
       `queue     ${queueLen}\n` +
+      `dispose   ${disposeLen}\n` +
       `pending   ${pendingGens}\n` +
       `build avg ${buildAvg.toFixed(2)}ms\n` +
       `LOD near  ${lodR} (adapt ${adapt})`;
