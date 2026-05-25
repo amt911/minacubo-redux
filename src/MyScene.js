@@ -187,6 +187,12 @@ class MyScene extends THREE.Scene {
     const SETTLE  = +(params.get('settle')   || 3000);
     const RECORD  = +(params.get('duration') || 30000);
 
+    // Adaptive LOD would react to the artificially low bench framerate by
+    // shrinking lodNearRadius mid-run; the resulting transition rebuilds
+    // skew the measurement away from steady-state perf. Turn it off for
+    // the duration of the bench so reports stay reproducible.
+    this.guiControls.adaptiveLOD = false;
+
     this._benchState      = 'settling';
     this._benchFrameTimes = [];
     this._benchSamples    = [];
@@ -372,6 +378,46 @@ class MyScene extends THREE.Scene {
       `build avg ${buildAvg.toFixed(2)}ms`;
   }
 
+  /**
+   * Tune chunkManager.lodNearRadius up/down to keep avg FPS in a target band.
+   * Tracks the last ~1 s of frame times; every 60 frames (~1 s at 60 FPS),
+   * if the bench is below 30 FPS shrinks the radius (more chunks fall to
+   * FAR LOD → cheaper); above 55 FPS grows it. Each adjustment is followed
+   * by a 3-second cooldown so we don't chase noise.
+   *
+   * @param {number} dt seconds since last frame
+   */
+  _tickAdaptiveLOD(dt) {
+    if (!this._fpsWindow) this._fpsWindow = [];
+    this._fpsWindow.push(dt * 1000);
+    if (this._fpsWindow.length > 60) this._fpsWindow.shift();
+
+    if (!this._adaptiveCdMs) this._adaptiveCdMs = 0;
+    this._adaptiveCdMs -= dt * 1000;
+
+    if (!this.guiControls.adaptiveLOD) return;
+    if (this._fpsWindow.length < 60) return;
+    if (this._adaptiveCdMs > 0) return;
+
+    let sum = 0;
+    for (let i = 0; i < this._fpsWindow.length; i++) sum += this._fpsWindow[i];
+    const avgFps = 1000 / (sum / this._fpsWindow.length);
+
+    const cur = this.guiControls.lodNearRadius;
+    const maxLOD = Math.max(2, Math.floor(this.DISTANCIA_RENDER / 2));
+    let next = cur;
+    if (avgFps < 30 && cur > 1) next = cur - 1;
+    else if (avgFps > 55 && cur < maxLOD) next = cur + 1;
+    if (next === cur) return;
+
+    this.guiControls.lodNearRadius = next;
+    this.chunkManager.lodNearRadius = next;
+    const pc = identifyChunk(this.model.position.x, this.model.position.z, this.TAM_CHUNK);
+    this.chunkManager._playerChunk.x = pc.x + 1; // force diff
+    this.chunkManager.setPlayerChunk(pc.x, pc.z);
+    this._adaptiveCdMs = 3000;
+  }
+
   createCamera() {
     this.camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
     this.camera.position.set(this.model.position.x, this.model.position.y + 10, this.model.position.z - 10);
@@ -475,6 +521,11 @@ class MyScene extends THREE.Scene {
       // cliff faces and underground exposure disappear in the distance but
       // instance count drops sharply. Smaller = cheaper, less detail.
       lodNearRadius: 4,
+      // When on, the LOD near radius auto-adjusts to keep frame rate in a
+      // target band: shrinks (more chunks at FAR LOD → cheaper) when avg
+      // FPS drops below 30, grows when avg FPS is above 55. Adjustments
+      // are cooled down (3 s between changes) to avoid oscillation.
+      adaptiveLOD: true,
       cameraSensitivity: 1.0,
       renderDistance: MyScene._loadRenderDistance(),
     }
@@ -493,6 +544,7 @@ class MyScene extends THREE.Scene {
       shadowRefreshFrames: 3,
       shadowCasterRange: 3,
       lodNearRadius: 4,
+      adaptiveLOD: true,
       cameraSensitivity: 1.0,
     };
 
@@ -579,6 +631,10 @@ class MyScene extends THREE.Scene {
         this.chunkManager._playerChunk.x = pc.x + 1; // force diff
         this.chunkManager.setPlayerChunk(pc.x, pc.z);
       });
+
+    graficos.add(this.guiControls, 'adaptiveLOD')
+      .name('Adaptive LOD (auto-tune)')
+      .listen();
 
     graficos.add(this.guiControls, 'cameraSensitivity', 0.1, 3.0, 0.05)
       .name('Camera sensitivity')
@@ -837,6 +893,7 @@ class MyScene extends THREE.Scene {
     this._benchTick();
 
     const delta=this.clock.getDelta();
+    this._tickAdaptiveLOD(delta);
 
     this.dayNightCycle.update();
     this.updateSunPosition();
