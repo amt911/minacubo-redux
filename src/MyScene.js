@@ -470,6 +470,11 @@ class MyScene extends THREE.Scene {
       // shadow-pass draw call cost. Must be ≥ ceil(shadowExtent/TC) or the
       // shadow camera's far cubes silently drop out.
       shadowCasterRange: 3,
+      // Chunk radius around the player rendered at full detail. Beyond this
+      // chunks emit only the topmost block of each column (LOD=FAR) —
+      // cliff faces and underground exposure disappear in the distance but
+      // instance count drops sharply. Smaller = cheaper, less detail.
+      lodNearRadius: 4,
       cameraSensitivity: 1.0,
       renderDistance: MyScene._loadRenderDistance(),
     }
@@ -487,6 +492,7 @@ class MyScene extends THREE.Scene {
       shadowExtent: 32,
       shadowRefreshFrames: 3,
       shadowCasterRange: 3,
+      lodNearRadius: 4,
       cameraSensitivity: 1.0,
     };
 
@@ -560,6 +566,19 @@ class MyScene extends THREE.Scene {
       // Re-apply castShadow on existing meshes immediately so the slider
       // feels responsive instead of waiting for the 30-frame cull tick.
       .onChange(applyShadowCasterRange);
+
+    graficos.add(this.guiControls, 'lodNearRadius', 1, 16, 1)
+      .name('LOD near radius (chunks)')
+      .listen()
+      .onChange((v) => {
+        this.chunkManager.lodNearRadius = v;
+        // Re-evaluate every meshed chunk against the new radius and queue
+        // rebuilds for any that crossed the bracket. setPlayerChunk does
+        // the scan; force it by faking a chunk change.
+        const pc = identifyChunk(this.model.position.x, this.model.position.z, this.TAM_CHUNK);
+        this.chunkManager._playerChunk.x = pc.x + 1; // force diff
+        this.chunkManager.setPlayerChunk(pc.x, pc.z);
+      });
 
     graficos.add(this.guiControls, 'cameraSensitivity', 0.1, 3.0, 0.05)
       .name('Camera sensitivity')
