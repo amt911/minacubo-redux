@@ -58,10 +58,19 @@ export class ChunkManager {
     /** @type {Array<{chunkX:number, chunkZ:number}>} */
     this._meshQueue = [];
 
+    // Exponential moving average of single-chunk build time (ms). Exposed
+    // for the in-game perf HUD.
+    this._buildTimeAvgMs = 0;
+    this._buildCount = 0;
+
     // Override shared geometry boundingSphere for per-chunk frustum culling.
-    // See _createChunkMaterialMesh — mesh.position is set per chunk, this
-    // sphere then lands at the chunk centroid via matrixWorld.
-    const sphereRadius = 20;
+    // mesh.position is set per chunk in _createChunkMaterialMesh, so the
+    // sphere ends up centred on the chunk via matrixWorld. Radius must cover
+    // a TC×TC horizontal extent (±6 from centroid) plus a tall mountain
+    // chunk's vertical extent (terrain top can hit y ≈ 60, deep stone reaches
+    // y ≈ -8, so max distance from centroid is ~35). 60 leaves headroom for
+    // edits without re-thinking the sphere on every block break.
+    const sphereRadius = 60;
     for (const tipo in this._geo) {
       this._geo[tipo].boundingSphere = new THREE.Sphere(
         new THREE.Vector3(0, 0, 0),
@@ -133,20 +142,41 @@ export class ChunkManager {
     this.chunkCollision.push(blocks);
     if (!this.chunk[chunkX]) this.chunk[chunkX] = [];
     this.chunk[chunkX][chunkZ] = blocks;
+
+    // Collision cache covers the 3×3 chunks around the last queried player
+    // position. A newly arrived chunk inside that window changes the answer,
+    // so flush. Chunks far from the player don't invalidate.
+    if (this._collCacheResult) {
+      const pc = identifyChunk(this._collCacheKeyX, this._collCacheKeyZ, this.TAM_CHUNK);
+      if (Math.abs(chunkX - pc.x) <= 1 && Math.abs(chunkZ - pc.z) <= 1) {
+        this._invalidateCollisionCache();
+      }
+    }
   }
 
   // ─── mesh helpers ─────────────────────────────────────────────────────────
 
   /**
    * Build (or rebuild) every material mesh for one chunk from its block data.
+   *
+   * Per-block face culling: a block is emitted as one InstancedMesh instance
+   * (full BoxGeometry, 12 tris) iff at least one of its 6 neighbours is
+   * absent. We tried per-face emission (one instance per exposed face) and
+   * it regressed FPS: instance count grew 1.5-2× per visible block, and the
+   * per-instance setup cost outweighed the triangle savings. Per-face only
+   * pays off paired with greedy meshing + a texture atlas (TODO Fase 5).
+   *
    * @param {number} chunkX
    * @param {number} chunkZ
    */
   _buildChunkMesh(chunkX, chunkZ) {
+    const t0 = performance.now();
     const blocks = this.chunk[chunkX]?.[chunkZ];
     if (!blocks || blocks.length === 0) return;
 
-    // Face culling: drop blocks with all 6 neighbours occupied.
+    // Occupancy set spans this chunk plus its 8 immediate neighbours so
+    // boundary blocks test against real cross-chunk neighbours, not against
+    // empty air.
     const occupancy = new Set();
     for (let dx = -1; dx <= 1; dx++) {
       for (let dz = -1; dz <= 1; dz++) {
@@ -184,6 +214,12 @@ export class ChunkManager {
     for (const type in groups) {
       this._createChunkMaterialMesh(chunkX, chunkZ, type, groups[type]);
     }
+
+    const dt = performance.now() - t0;
+    this._buildTimeAvgMs = this._buildCount === 0
+      ? dt
+      : this._buildTimeAvgMs * 0.9 + dt * 0.1;
+    this._buildCount++;
   }
 
   _createChunkMaterialMesh(chunkX, chunkZ, type, list) {
@@ -252,6 +288,7 @@ export class ChunkManager {
     this._buildChunkMesh(chunkX + 1, chunkZ);
     this._buildChunkMesh(chunkX, chunkZ - 1);
     this._buildChunkMesh(chunkX, chunkZ + 1);
+    this._invalidateCollisionCache();
   }
 
   // ─── public API ───────────────────────────────────────────────────────────
@@ -417,6 +454,31 @@ export class ChunkManager {
   }
 
   /**
+   * Flat list of every InstancedMesh inside a chunk radius around a position.
+   * Used for raycast targets — passes a much smaller candidate set to
+   * THREE.Raycaster.intersectObjects than `allMeshes` (which spans the whole
+   * render distance and is O(chunks * materials) — easily thousands at DR≥16).
+   *
+   * @param {number} worldX
+   * @param {number} worldZ
+   * @param {number} chunkRadius
+   */
+  getMeshesNear(worldX, worldZ, chunkRadius) {
+    const pc = identifyChunk(worldX, worldZ, this.TAM_CHUNK);
+    const out = [];
+    for (let dx = -chunkRadius; dx <= chunkRadius; dx++) {
+      const col = this.chunkMeshes[pc.x + dx];
+      if (!col) continue;
+      for (let dz = -chunkRadius; dz <= chunkRadius; dz++) {
+        const chunk = col[pc.z + dz];
+        if (!chunk) continue;
+        for (const k in chunk) out.push(chunk[k]);
+      }
+    }
+    return out;
+  }
+
+  /**
    * Collect blocks around a chunk position for collision detection.
    * @param {{x:number,z:number}} chunkPos
    * @param {number} radius chunk radius
@@ -440,13 +502,35 @@ export class ChunkManager {
 
   /**
    * Player collisions — only the 3×3 chunks around player.
+   *
+   * Cached by integer (x, z) cell: physics queries this every frame, but the
+   * 3×3 chunk neighbourhood only changes when the player moves a full block
+   * in X or Z. Invalidation happens on any chunk-data edit
+   * (`_invalidateCollisionCache`, called from `rebuildChunkMaterial` and the
+   * worker storeChunkData path).
+   *
    * @param {number} playerX
    * @param {number} playerZ
    */
   getPlayerCollisions(playerX, playerZ) {
-    return this.getCollisionsAround(
+    const ix = Math.floor(playerX);
+    const iz = Math.floor(playerZ);
+    if (this._collCacheKeyX === ix && this._collCacheKeyZ === iz && this._collCacheResult) {
+      return this._collCacheResult;
+    }
+    const r = this.getCollisionsAround(
       identifyChunk(playerX, playerZ, this.TAM_CHUNK),
       3
     );
+    this._collCacheKeyX = ix;
+    this._collCacheKeyZ = iz;
+    this._collCacheResult = r;
+    return r;
+  }
+
+  _invalidateCollisionCache() {
+    this._collCacheKeyX = null;
+    this._collCacheKeyZ = null;
+    this._collCacheResult = null;
   }
 }

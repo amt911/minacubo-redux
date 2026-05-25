@@ -87,17 +87,30 @@ Mejorar la gestión de chunks:
 - [x] MeshPhong → MeshLambert (cheaper per-pixel)
 - [x] Preload 1-chunk ring around visible window (chunk-cross no longer lags)
 - [x] Time-budgeted mesh tick + nearest-first ordering
-- [ ] Shrink sun shadow camera frustum (~30% shadow-pass cost)
-- [ ] Per-face culling (only emit faces with no neighbour, ~4-5× triangle drop)
-- [ ] Greedy meshing (bloques contiguos misma cara → quad único, ~10× drop)
+- [x] Shrink sun shadow camera frustum (~30% shadow-pass cost)
+- [x] Cache getPlayerCollisions cuando player no cambia de bloque entero (skip ~12k-block scan/frame)
+- [x] Raycast (block break/place + springarm) limitado a 3×3 chunks alrededor del player (era O(allMeshes))
+- [x] Bounding sphere chunk corregido (20→60, montañas ya no over-culled)
+- [x] Dedupe gens en el worker pool + tick siempre construye queued chunks + dispose scan completo
+- [x] Hysteresis en window slide (DR par ya no oscila cada frame)
+- [x] HUD métricas in-game (calls, tris, meshes, instances, queue, build avg ms)
+- [ ] **Per-face culling rechazado sin atlas+greedy** — instance overhead > triangle savings. Reintentar tras texture atlas.
+- [ ] Greedy meshing (bloques contiguos misma cara → quad único, ~10× drop) — requiere atlas
 - [ ] Texture atlas (precondition for greedy meshing + reduces material switches)
 - [ ] LOD chunks lejanos (geometría simplificada)
 - [ ] Optional CSM (cascaded shadow maps) for sharper near + cheaper far shadows
-- [ ] Cull underground when player Y is above terrain top
+- [ ] Cull underground when player Y is above terrain top (mesh.visible=false para Stone/Dirt/Rock cuando playerY > top)
 - [ ] Octree / grid spatial index for raycasts (linear iteration over allMeshes)
-- [ ] Skip raycast feedback when pointer not locked + game idle
-- [ ] Cache getPlayerCollisions when player moves <1 block between frames
-- [ ] Move mesh-build occupancy set + grouping to web worker too
+- [ ] Skip raycast feedback when pointer not locked + game idle (track last input event, ampliar throttle a 1s si idle)
+- [ ] Move mesh-build occupancy set + grouping to web worker too (occupancy Set + grouping cost main thread)
+- [ ] Bit-packed occupancy keys (Int32 hash en lugar de string concat → cero alloc en build hot path)
+- [ ] Pre-allocate InstancedMesh capacity (block break/place no requiere realloc + redispatch matriz completa)
+- [ ] Deferred dispose queue (drain mesh.dispose() across frames en lugar de batch en scroll)
+- [ ] Distance-based shadow casting (mesh.castShadow=false para chunks lejos del player)
+- [ ] Rebuild chunk mesh on neighbor load (overdraw boundary actualmente — face culling stale)
+- [ ] Per-chunk bounding sphere computada de bloques reales (en lugar de shared 60)
+- [ ] Pool de THREE.Vector2/Raycaster en RaycastInteraction (alloc por evento ahora)
+- [ ] Reducir log de chunkCollision array (crece sin límite — leak)
 
 ## Fase 6 — Ambicioso
 

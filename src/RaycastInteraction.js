@@ -11,15 +11,17 @@ export class RaycastInteraction {
    *   getObjeto: () => number,
    *   scene: THREE.Scene,
    *   TAM_CHUNK: number,
+   *   getPlayerPosition: () => {x:number, y:number, z:number},
    * }} opts
    */
   constructor(opts) {
-    this._camera         = opts.camera;
-    this._chunkManager   = opts.chunkManager;
-    this._blockTypes     = opts.blockTypes;
-    this._getObjeto      = opts.getObjeto;
-    this._scene          = opts.scene;
-    this._TAM_CHUNK      = opts.TAM_CHUNK;
+    this._camera           = opts.camera;
+    this._chunkManager     = opts.chunkManager;
+    this._blockTypes       = opts.blockTypes;
+    this._getObjeto        = opts.getObjeto;
+    this._scene            = opts.scene;
+    this._TAM_CHUNK        = opts.TAM_CHUNK;
+    this._getPlayerPosition = opts.getPlayerPosition;
 
     this._rightDragStart = null;
 
@@ -104,7 +106,11 @@ export class RaycastInteraction {
    * @param {boolean} forRemoval
    */
   _nearestHit(raycaster, forRemoval) {
-    const meshes = this._chunkManager.allMeshes;
+    // Raycast distance cap is 20 units below — that's < 2 chunks (TAM_CHUNK
+    // = 12). Filter meshes to a 2-chunk radius around the player so we hand
+    // Raycaster a few dozen meshes instead of the full render-distance list.
+    const p = this._getPlayerPosition();
+    const meshes = this._chunkManager.getMeshesNear(p.x, p.z, 2);
     const hits = raycaster.intersectObjects(meshes, false);
     for (const hit of hits) {
       if (hit.distance > 20) break;

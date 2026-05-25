@@ -141,12 +141,13 @@ class MyScene extends THREE.Scene {
     this.dayNightCycle = new DayNightCycle(this, this.fog, this.spotLight, this.sunLight);
 
     this.raycast = new RaycastInteraction({
-      camera:          this.camera,
-      chunkManager:    this.chunkManager,
-      blockTypes:      this.blockTypes,
-      getObjeto:       () => this.objeto,
-      scene:           this,
-      TAM_CHUNK:       this.TAM_CHUNK,
+      camera:            this.camera,
+      chunkManager:      this.chunkManager,
+      blockTypes:        this.blockTypes,
+      getObjeto:         () => this.objeto,
+      scene:             this,
+      TAM_CHUNK:         this.TAM_CHUNK,
+      getPlayerPosition: () => this.model.position,
     });
 
     this.input = new InputHandler({
@@ -191,6 +192,56 @@ class MyScene extends THREE.Scene {
     document.querySelector('#Stats-output').appendChild(stats.domElement);
 
     this.stats = stats;
+
+    // Perf overlay: draw calls, triangles, chunk mesh count, instance count,
+    // average chunk-build time. Sits below Stats. Update throttled to 2 Hz
+    // by _updatePerfPanel() so the DOM write doesn't compete for the frame.
+    const panel = document.createElement('div');
+    panel.style.cssText =
+      'position:absolute;top:50px;left:0;background:rgba(0,0,0,0.6);' +
+      'color:#0f0;font:11px/1.35 monospace;padding:4px 8px;' +
+      'pointer-events:none;z-index:9999;white-space:pre;min-width:140px';
+    panel.textContent = 'perf …';
+    document.body.appendChild(panel);
+    this._perfPanel = panel;
+    this._perfNextMs = 0;
+  }
+
+  _updatePerfPanel() {
+    const now = performance.now();
+    if (now < this._perfNextMs) return;
+    this._perfNextMs = now + 500;
+
+    const info = this.renderer.info.render;
+
+    let meshes = 0;
+    let instances = 0;
+    const cms = this.chunkManager.chunkMeshes;
+    for (const xKey in cms) {
+      const col = cms[xKey];
+      for (const zKey in col) {
+        const types = col[zKey];
+        for (const k in types) {
+          meshes++;
+          instances += types[k].count;
+        }
+      }
+    }
+
+    const chunkCount = this.chunkManager.chunkCollision.length;
+    const queueLen = this.chunkManager._meshQueue.length;
+    const pendingGens = this.chunkManager._pendingGens.size;
+    const buildAvg = this.chunkManager._buildTimeAvgMs;
+
+    this._perfPanel.textContent =
+      `calls     ${info.calls}\n` +
+      `tris      ${info.triangles.toLocaleString()}\n` +
+      `meshes    ${meshes}\n` +
+      `instances ${instances.toLocaleString()}\n` +
+      `chunks    ${chunkCount}\n` +
+      `queue     ${queueLen}\n` +
+      `pending   ${pendingGens}\n` +
+      `build avg ${buildAvg.toFixed(2)}ms`;
   }
 
   createCamera() {
@@ -510,7 +561,12 @@ class MyScene extends THREE.Scene {
     this._springArmCaster.near = 0.1;
     this._springArmCaster.far = desired;
     let safeDist = desired;
-    const hits = this._springArmCaster.intersectObjects(this.chunkManager.allMeshes, false);
+    // Springarm only reaches `desired` units (~camera distance, < 2 chunks).
+    // Filtering candidate meshes to a 2-chunk radius drops the intersect
+    // input from hundreds (allMeshes spans the whole render distance) to a
+    // few dozen — huge win because this runs every 5 frames.
+    const meshes = this.chunkManager.getMeshesNear(this.model.position.x, this.model.position.z, 2);
+    const hits = this._springArmCaster.intersectObjects(meshes, false);
     if (hits.length > 0 && hits[0].distance < safeDist) {
       safeDist = Math.max(MIN_DIST, hits[0].distance - MARGIN);
     }
@@ -523,6 +579,7 @@ class MyScene extends THREE.Scene {
 
   update() {
     if (this.stats) this.stats.update();
+    this._updatePerfPanel();
 
     const delta=this.clock.getDelta();
 
