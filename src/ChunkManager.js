@@ -239,21 +239,38 @@ export class ChunkManager {
 
     let blocksToMesh = blocks;
     if (lod === 'ULTRAFAR') {
-      // One block per column — the topmost GROUND block (trees skipped).
-      // At this distance (>NEAR+12 chunks) trees would just be 2-block dots
-      // and not worth a separate material/draw call. Cliffs lose detail too
-      // but are barely visible at >300 blocks away. Per-chunk material count
-      // drops from 3-5 to 1-2 in typical terrain.
+      // ULTRAFAR is the vertex-pipeline bottleneck at high DR: with the
+      // top-block-per-column scheme each chunk emitted 144 instances and
+      // a horde-spawn DR=64 ring of ~3500 ULTRAFAR chunks pushed total
+      // instance count past 500K — roughly 12M post-instance vertices
+      // through the GPU per frame.
+      //
+      // Two cuts:
+      //   1. Half-resolution column sampling. Only emit columns where
+      //      (x + z) is even. Visually = pixelated chess-pattern at >300
+      //      block distance, indistinguishable from terrain noise. Cuts
+      //      instance count per chunk 144 → 72.
+      //   2. Force the single 'Hierba' (grass) material for every emitted
+      //      block. Cliff dirt/stone vanish at distance anyway. Each
+      //      ULTRAFAR chunk now renders as exactly ONE InstancedMesh /
+      //      draw call.
       /** @type {Map<number, {x:number,y:number,z:number,material:string}>} */
       const tops = new Map();
       for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i];
         if (b.material === 'OakWood' || b.material === 'OakLeaves') continue;
+        // Half-resolution sample. x and z are integers (block coords).
+        if (((b.x + b.z) & 1) !== 0) continue;
         const colKey = (b.x + 32768) * 65536 + (b.z + 32768);
         const prev = tops.get(colKey);
         if (prev === undefined || b.y > prev.y) tops.set(colKey, b);
       }
-      blocksToMesh = Array.from(tops.values());
+      // Coalesce to one material so each ULTRAFAR chunk = 1 draw call.
+      const farBlocks = [];
+      for (const b of tops.values()) {
+        farBlocks.push({ x: b.x, y: b.y, z: b.z, material: 'Hierba' });
+      }
+      blocksToMesh = farBlocks;
     } else if (lod === 'FAR') {
       // Per-column top Y + tree-material passthrough. Earlier we kept only
       // the topmost block per column, but that destroyed two things:

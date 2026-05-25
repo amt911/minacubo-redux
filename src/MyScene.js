@@ -418,7 +418,6 @@ class MyScene extends THREE.Scene {
 
     if (!this.guiControls.adaptiveLOD) return;
     if (this._fpsWindow.length < 60) return;
-    if (this._adaptiveCdMs > 0) return;
 
     let sum = 0;
     for (let i = 0; i < this._fpsWindow.length; i++) sum += this._fpsWindow[i];
@@ -426,8 +425,16 @@ class MyScene extends THREE.Scene {
 
     const cur = this.guiControls.lodNearRadius;
     const maxLOD = Math.max(2, Math.floor(this.DISTANCIA_RENDER / 2));
+
+    // Emergency shrink: when FPS is under 15 the user is hard-stuck. Skip
+    // the cooldown and shrink aggressively (-2 per tick) until we recover.
+    // Otherwise honour the 3 s cooldown so normal play doesn't chase noise.
+    const emergency = avgFps < 15;
+    if (!emergency && this._adaptiveCdMs > 0) return;
+
     let next = cur;
-    if (avgFps < 30 && cur > 1) next = cur - 1;
+    if (emergency && cur > 1) next = Math.max(1, cur - 2);
+    else if (avgFps < 30 && cur > 1) next = cur - 1;
     else if (avgFps > 55 && cur < maxLOD) next = cur + 1;
     if (next === cur) return;
 
