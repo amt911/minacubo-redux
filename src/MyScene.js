@@ -366,6 +366,8 @@ class MyScene extends THREE.Scene {
     const queueLen = this.chunkManager._meshQueue.length;
     const pendingGens = this.chunkManager._pendingGens.size;
     const buildAvg = this.chunkManager._buildTimeAvgMs;
+    const lodR = this.chunkManager.lodNearRadius;
+    const adapt = this.guiControls.adaptiveLOD ? 'on' : 'off';
 
     this._perfPanel.textContent =
       `calls     ${info.calls}\n` +
@@ -375,7 +377,8 @@ class MyScene extends THREE.Scene {
       `chunks    ${chunkCount}\n` +
       `queue     ${queueLen}\n` +
       `pending   ${pendingGens}\n` +
-      `build avg ${buildAvg.toFixed(2)}ms`;
+      `build avg ${buildAvg.toFixed(2)}ms\n` +
+      `LOD near  ${lodR} (adapt ${adapt})`;
   }
 
   /**

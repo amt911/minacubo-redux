@@ -107,7 +107,12 @@ Mejorar la gestión de chunks:
 - [x] Worker pool dinámico (`hardwareConcurrency - 2`, cap [2..8]) en lugar de fijo 4
 - [x] Underground bulk cull (Stone/Dirt/Rock hidden cuando playerY > chunkMaxY + 10)
 - [x] raycaster.far = 20 en RaycastInteraction (short-circuit per-triangle tests más allá)
-- [x] Shadow map needsUpdate cada 6 frames en vez de 3 (sun mueve lento, ~100ms lag invisible)
+- [x] Shadow map needsUpdate cada 6 frames en vez de 3 (sun mueve lento, ~100ms lag invisible) — revertido a 3 + slider
+- [x] GUI sliders para todo: shadowExtent (8..96), shadowRefreshFrames (1..10), shadowCasterRange (0..8), shadowResolution + opción 4096, [Reset] button restaura defaults
+- [x] Render distance cap subido 32 → 64
+- [x] LOD chunks distantes (FAR ring emite solo top-of-column, **fps +12%, p99 -25%, tris -27%** según bench)
+- [x] Adaptive LOD (auto-tune lodNearRadius por FPS: shrink si <30, grow si >55, cooldown 3s)
+- [x] HUD muestra LOD radius + adaptive on/off
 
 **Cumulative bench impact (initial → final, headless software GL, DR=12):**
 - fps_avg `3.41 → 5.06` **(+48%)**
@@ -119,7 +124,6 @@ Mejorar la gestión de chunks:
 ### Pendiente (orden ROI estimado, todo refactor grande)
 
 - [ ] **Texture atlas + greedy meshing** (multi-step pero win gigante; bloquea per-face culling útil)
-- [ ] **LOD chunks distantes** (FAR ring emite solo top de columna, requiere tracker `chunkLOD[x][z]` + rebuild on bracket transition en updateScroll)
 - [ ] **Move mesh-build occupancy + grouping a worker** (offload main thread; complica plumbing porque worker necesita 3×3 chunk data o SharedArrayBuffer)
 - [ ] **Pre-allocate InstancedMesh capacity** (block break/place rebuilea chunk entero hoy; pre-alloc + count bump = edit barato)
 - [ ] **Per-face culling** (reintentar tras atlas+greedy; sin atlas hace instance overhead > savings)
