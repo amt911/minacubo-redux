@@ -63,14 +63,14 @@ export class ChunkManager {
     this._buildTimeAvgMs = 0;
     this._buildCount = 0;
 
-    // Override shared geometry boundingSphere for per-chunk frustum culling.
-    // mesh.position is set per chunk in _createChunkMaterialMesh, so the
-    // sphere ends up centred on the chunk via matrixWorld. Radius must cover
-    // a TC×TC horizontal extent (±6 from centroid) plus a tall mountain
-    // chunk's vertical extent (terrain top can hit y ≈ 60, deep stone reaches
-    // y ≈ -8, so max distance from centroid is ~35). 60 leaves headroom for
-    // edits without re-thinking the sphere on every block break.
-    const sphereRadius = 60;
+    // Shared geometry boundingSphere — overridden per type to cover a chunk
+    // centred on its centroid. 20 covers the TC×TC horizontal extent and the
+    // typical block-y range comfortably. Tall mountain tops can extend past
+    // this and occasionally pop in/out at the frustum edge; the fix is a
+    // per-chunk bounding sphere via cloned geometry (TODO Fase 5) but that
+    // costs ~5 MB and dispose plumbing — not worth it until we hit the
+    // mountain pop-in for real.
+    const sphereRadius = 20;
     for (const tipo in this._geo) {
       this._geo[tipo].boundingSphere = new THREE.Sphere(
         new THREE.Vector3(0, 0, 0),

@@ -28,6 +28,7 @@ const BASE      = argv.base       ?? 'http://localhost:8080';
 const DURATION  = +(argv.duration ?? 30000);
 const SETTLE    = +(argv.settle   ?? 3000);
 const DR        = +(argv.DR       ?? 12);
+const RUNS      = +(argv.runs     ?? 1);
 const OUT       = argv.out        ?? null;
 const COMPARE   = argv.compare    ?? null;
 const TIMEOUT   = (DURATION + SETTLE + 30000);
@@ -70,37 +71,43 @@ const browser = await puppeteer.launch({
 });
 
 try {
-  const page = await browser.newPage();
+  const runs = [];
+  for (let r = 0; r < RUNS; r++) {
+    if (RUNS > 1) console.error(`\n[bench] === run ${r + 1}/${RUNS} ===`);
+    const page = await browser.newPage();
 
-  page.on('console', (msg) => {
-    const t = msg.text();
-    if (t.startsWith('BENCH') || t.includes('error')) console.error(`[page] ${t}`);
-  });
-  page.on('pageerror', (e) => console.error('[page error]', e.message));
+    page.on('console', (msg) => {
+      const t = msg.text();
+      if (t.startsWith('BENCH') || t.includes('error')) console.error(`[page] ${t}`);
+    });
+    page.on('pageerror', (e) => console.error('[page error]', e.message));
 
-  await page.goto(url, { waitUntil: 'load', timeout: 30000 });
+    await page.goto(url, { waitUntil: 'load', timeout: 30000 });
 
-  // Poll document.title for BENCH_DONE sentinel.
-  const deadline = Date.now() + TIMEOUT;
-  let report = null;
-  while (Date.now() < deadline) {
-    const title = await page.title();
-    if (title === 'BENCH_DONE') {
-      report = await page.evaluate(() => /** @type {any} */ (window).__benchReport);
-      break;
+    const deadline = Date.now() + TIMEOUT;
+    let report = null;
+    while (Date.now() < deadline) {
+      const title = await page.title();
+      if (title === 'BENCH_DONE') {
+        report = await page.evaluate(() => /** @type {any} */ (window).__benchReport);
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 500));
     }
-    await new Promise((r) => setTimeout(r, 500));
+    await page.close();
+
+    if (!report) {
+      console.error('[bench] TIMEOUT — no BENCH_DONE within deadline');
+      process.exit(1);
+    }
+    runs.push(report);
   }
 
-  if (!report) {
-    console.error('[bench] TIMEOUT — no BENCH_DONE within deadline');
-    process.exit(1);
-  }
-
-  console.log(JSON.stringify(report, null, 2));
+  const finalReport = runs.length === 1 ? runs[0] : aggregate(runs);
+  console.log(JSON.stringify(finalReport, null, 2));
 
   if (OUT) {
-    writeFileSync(OUT, JSON.stringify(report, null, 2));
+    writeFileSync(OUT, JSON.stringify(finalReport, null, 2));
     console.error(`[bench] wrote ${OUT}`);
   }
 
@@ -111,10 +118,24 @@ try {
     }
     const base = JSON.parse(readFileSync(COMPARE, 'utf8'));
     console.error('\n[bench] diff vs baseline (' + COMPARE + '):');
-    diffReports(base, report);
+    diffReports(base, finalReport);
   }
 } finally {
   await browser.close();
+}
+
+/** Median across multiple runs for every numeric field of the first run. */
+function aggregate(runs) {
+  const out = { ...runs[0] };
+  const numKeys = Object.keys(runs[0]).filter((k) => typeof runs[0][k] === 'number');
+  for (const k of numKeys) {
+    const vals = runs.map((r) => r[k]).filter((v) => typeof v === 'number').sort((a, b) => a - b);
+    if (!vals.length) continue;
+    out[k] = +vals[Math.floor(vals.length / 2)].toFixed(3);
+  }
+  out.runs = runs.length;
+  out._raw = runs.map((r) => ({ fps_avg: r.fps_avg, frame_avg_ms: r.frame_avg_ms }));
+  return out;
 }
 
 function diffReports(a, b) {
