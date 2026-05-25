@@ -29,7 +29,9 @@ class Collisions {
    * @param {number} speed horizontal step magnitude this frame.
    */
   update(blocks, entity, boundingBox, keysPressed, moveDir, speed) {
-    const delta = this.clock.getDelta();
+    // Clamp delta — physics fallVel integration must not see >67 ms or the
+    // entity gains huge falling speed over a single stutter frame.
+    const delta = Math.min(this.clock.getDelta(), 1 / 15);
 
     if (entity.canJump && keysPressed != null && keysPressed[' ']) {
       this.fallVel = 10;

@@ -82,6 +82,21 @@ export class NPCManager {
     const player = this._getPlayerPos();
     const playerObj = this._getPlayer ? this._getPlayer() : null;
 
+    // Pre-build the zombie soft-collider snapshot once per frame, reusing a
+    // pool of objects. Pre-pool each per-zombie loop did
+    //   zCols.slice() + (N-1) push({x,y,z,material:''})
+    // — for a 20-zombie horde that's 380 fresh objects + 20 array copies
+    // every frame, classic GC stutter material.
+    if (!this._softPool) this._softPool = [];
+    while (this._softPool.length < this._zombies.length) {
+      this._softPool.push({ x: 0, y: 0, z: 0, material: '' });
+    }
+    const softs = this._softPool;
+    for (let i = 0; i < this._zombies.length; i++) {
+      const o = this._zombies[i].boundingBox.position;
+      softs[i].x = o.x; softs[i].y = o.y; softs[i].z = o.z;
+    }
+
     // All zombies — face, chase (with detour if stuck), and attack the player
     for (let i = 0; i < this._zombies.length; i++) {
       const z = this._zombies[i];
@@ -130,18 +145,12 @@ export class NPCManager {
       }
 
       const zChunk = identifyChunk(z.position.x, z.position.z, this._TAM_CHUNK);
-      const zCols = this._chunkManager.getCollisionsAround(zChunk, NPCManager.NPC_PHYSICS_RADIUS);
-
-      // Append other zombies as 1×1×1 soft colliders so the horde doesn't
-      // collapse into a single overlapping pile. blockCentersToAABBs treats
-      // every entry as a unit cube — using boundingBox.position (≈ feet+1)
-      // puts the cube around the zombie's body midline, which is fine for
-      // horizontal separation without interfering with vertical autojump.
-      const blocks = zCols.slice();
-      for (let j = 0; j < this._zombies.length; j++) {
+      // getCollisionsAround returns a fresh array — own it, push soft
+      // colliders directly instead of slicing.
+      const blocks = this._chunkManager.getCollisionsAround(zChunk, NPCManager.NPC_PHYSICS_RADIUS);
+      for (let j = 0; j < softs.length; j++) {
         if (j === i) continue;
-        const o = this._zombies[j].boundingBox.position;
-        blocks.push({ x: o.x, y: o.y, z: o.z, material: '' });
+        blocks.push(softs[j]);
       }
 
       // Stuck detection: capture pre-update position, compare post-update.

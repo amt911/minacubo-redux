@@ -305,7 +305,9 @@ class Player extends THREE.Object3D {
   }
 
   update(blocks, keysPressed) {
-    const delta= this.clock.getDelta();
+    // Clamp delta — long frames (shader compile, GC) otherwise turn into
+    // huge fall velocities + instant fall damage on resume.
+    const delta = Math.min(this.clock.getDelta(), 1 / 15);
     const speed = delta * 4.317;
     // Derive orientation from camera geometry — works regardless of whether
     // OrbitControls or pointer-lock mode is driving the camera.

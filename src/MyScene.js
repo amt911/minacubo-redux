@@ -749,6 +749,11 @@ class MyScene extends THREE.Scene {
       // castShadow flag per InstancedMesh, can't toggle per instance).
       this.hordeRenderer.add(zombie);
     }
+    // Pre-compile shaders for the now-active InstancedMesh materials.
+    // Without this, the first render after spawn pays the shader compile cost
+    // on the main thread — a multi-100ms stall that lets zombies "teleport"
+    // when the next delta lands huge.
+    this.renderer.compile(this, this.camera);
   }
 
   setupPointerLock() {
@@ -965,7 +970,10 @@ class MyScene extends THREE.Scene {
     this._updatePerfPanel();
     this._benchTick();
 
-    const delta=this.clock.getDelta();
+    // Clamp delta so a long frame (GC, shader compile, alt-tab) doesn't cause
+    // physics teleports. 1/15s ≈ 67 ms ≈ ~4 px of player movement at 4.317
+    // units/s, ~0.07 units of zombie movement — recoverable, no instant death.
+    const delta = Math.min(this.clock.getDelta(), 1 / 15);
     this._tickAdaptiveLOD(delta);
 
     this.dayNightCycle.update();
