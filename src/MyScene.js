@@ -438,12 +438,12 @@ class MyScene extends THREE.Scene {
       const url = new URLSearchParams(location.search);
       if (url.has('DR')) {
         const u = parseInt(url.get('DR') ?? '', 10);
-        if (Number.isFinite(u) && u >= 3 && u <= 32) return u;
+        if (Number.isFinite(u) && u >= 3 && u <= 64) return u;
       }
     } catch { /* location/URLSearchParams may be unavailable */ }
     try {
       const v = parseInt(localStorage.getItem('renderDistance') ?? '9', 10);
-      if (Number.isFinite(v) && v >= 3 && v <= 32) return v;
+      if (Number.isFinite(v) && v >= 3 && v <= 64) return v;
     } catch { /* localStorage may be unavailable */ }
     return 9;
   }
@@ -534,7 +534,7 @@ class MyScene extends THREE.Scene {
     graficos.add(this.guiControls, 'cameraSensitivity', 0.1, 3.0, 0.05)
       .name('Camera sensitivity');
 
-    graficos.add(this.guiControls, 'renderDistance', 3, 32, 1)
+    graficos.add(this.guiControls, 'renderDistance', 3, 64, 1)
       .name('Render distance (reloads)')
       .onFinishChange((v) => {
         try { localStorage.setItem('renderDistance', String(v)); } catch { /* ignore */ }
