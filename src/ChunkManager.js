@@ -234,14 +234,38 @@ export class ChunkManager {
 
     let blocksToMesh = blocks;
     if (lod === 'FAR') {
-      const topByCol = new Map();
+      // Per-column top Y + tree-material passthrough. Earlier we kept only
+      // the topmost block per column, but that destroyed two things:
+      //   1. Trees became floating leaf canopies because their wood trunks
+      //      weren't the column top. Tree materials (OakWood, OakLeaves)
+      //      are now passed through at full detail.
+      //   2. Cliffs displayed as 1-block-tall edges because only the top
+      //      block of each column was emitted, even when the neighbour
+      //      column was several blocks lower. Now we keep the top block
+      //      plus the 3 blocks immediately below it; the face-culling pass
+      //      below drops the ones that are still fully neighboured (flat
+      //      terrain stays at ~1 block per column), but cliffs render with
+      //      their full visible height.
+      /** @type {Map<number, number>} */
+      const topYByCol = new Map();
       for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i];
         const colKey = (b.x + 32768) * 65536 + (b.z + 32768);
-        const prev = topByCol.get(colKey);
-        if (!prev || b.y > prev.y) topByCol.set(colKey, b);
+        const prev = topYByCol.get(colKey);
+        if (prev === undefined || b.y > prev) topYByCol.set(colKey, b.y);
       }
-      blocksToMesh = Array.from(topByCol.values());
+      const farBlocks = [];
+      for (let i = 0; i < blocks.length; i++) {
+        const b = blocks[i];
+        if (b.material === 'OakWood' || b.material === 'OakLeaves') {
+          farBlocks.push(b);
+          continue;
+        }
+        const colKey = (b.x + 32768) * 65536 + (b.z + 32768);
+        const top = topYByCol.get(colKey);
+        if (top !== undefined && b.y >= top - 3) farBlocks.push(b);
+      }
+      blocksToMesh = farBlocks;
     }
 
     // Bit-packed (x, y, z) → Number occupancy key. Block coords have integer
