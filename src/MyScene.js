@@ -808,6 +808,7 @@ class MyScene extends THREE.Scene {
     // saves their per-mesh setup in the shadow pass.
     if (this._shadowFrame % 30 === 0) {
       this.chunkManager.updateShadowCastersByDistance(this.model.position.x, this.model.position.z);
+      this.chunkManager.updateUndergroundCull(this.model.position.y);
     }
 
     this.renderer.render(this, this.getCamera());

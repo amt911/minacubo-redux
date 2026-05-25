@@ -47,6 +47,12 @@ export class ChunkManager {
     // grew unbounded and held references to disposed-chunk block data.
     this.chunkCount = 0;
 
+    // Per-chunk max Y of any block — used by the underground-cull pass to
+    // toggle bulk meshes (Stone/Dirt/Rock) invisible when the player is far
+    // above this column. Keyed [chunkX][chunkZ]. Populated on _storeChunkData.
+    /** @type {Object<number, Object<number, number>>} */
+    this.chunkMaxY = {};
+
     /** @type {{min:{x:number,z:number}, max:{x:number,z:number}}} */
     this.chunkMinMax = {
       min: { x: 0, z: 0 },
@@ -93,7 +99,12 @@ export class ChunkManager {
     /** @type {Map<string, Promise<Array<{x:number,y:number,z:number,material:string}>>>} */
     this._pendingGens = new Map();
 
-    const WORKER_COUNT = 4;
+    // Worker pool sized to leave the main thread + render thread room. On
+    // a 4-core machine we get 2 workers; on 8-core, 6; capped at 8 so a
+    // 32-core box doesn't spawn an absurd number of dedicated workers (each
+    // carries its own simplex-noise + module load, ~5 MB JS heap).
+    const hc = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 4;
+    const WORKER_COUNT = Math.max(2, Math.min(8, hc - 2));
     for (let i = 0; i < WORKER_COUNT; i++) {
       const w = new Worker(new URL('./chunkWorker.js', import.meta.url), { type: 'module' });
       w.onmessage = (e) => this._onWorkerMessage(e);
@@ -143,6 +154,14 @@ export class ChunkManager {
     if (!this.chunk[chunkX][chunkZ]) this.chunkCount++;
     this.chunk[chunkX][chunkZ] = blocks;
 
+    // Track max Y for the underground-cull pass.
+    let maxY = -Infinity;
+    for (let i = 0; i < blocks.length; i++) {
+      if (blocks[i].y > maxY) maxY = blocks[i].y;
+    }
+    if (!this.chunkMaxY[chunkX]) this.chunkMaxY[chunkX] = {};
+    this.chunkMaxY[chunkX][chunkZ] = maxY;
+
     // Collision cache covers the 3×3 chunks around the last queried player
     // position. A newly arrived chunk inside that window changes the answer,
     // so flush. Chunks far from the player don't invalidate.
@@ -150,6 +169,21 @@ export class ChunkManager {
       const pc = identifyChunk(this._collCacheKeyX, this._collCacheKeyZ, this.TAM_CHUNK);
       if (Math.abs(chunkX - pc.x) <= 1 && Math.abs(chunkZ - pc.z) <= 1) {
         this._invalidateCollisionCache();
+      }
+    }
+
+    // Face culling at chunk boundaries depends on neighbour block data
+    // being present at build time. If a cardinal neighbour is already
+    // meshed when our data arrives, its boundary faces toward us were
+    // emitted as exposed (we weren't there yet) — re-queue it so its
+    // boundary face culling refreshes against our blocks. Skip diagonal
+    // neighbours; they only share one corner block per face direction.
+    const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (let i = 0; i < dirs.length; i++) {
+      const nx = chunkX + dirs[i][0];
+      const nz = chunkZ + dirs[i][1];
+      if (this.chunkMeshes[nx]?.[nz]) {
+        this._meshQueue.push({ chunkX: nx, chunkZ: nz });
       }
     }
   }
@@ -509,6 +543,39 @@ export class ChunkManager {
     }
 
     return true;
+  }
+
+  /**
+   * Hide bulk (Stone / Dirt / Rock) meshes for chunks whose entire vertical
+   * extent sits well below the player. When the player is on a hill / flying
+   * / standing on top of a tall pillar, those bulk meshes are fully occluded
+   * by the surface materials (Grass etc.) above them — the GPU still pays
+   * the vertex cost for them, even with frustum + face culling, because the
+   * top of each chunk still has SOME exposed faces that pass culling.
+   *
+   * Cheap O(chunks) per call; safe to invoke at the 30-frame cadence already
+   * used by updateShadowCastersByDistance.
+   *
+   * @param {number} playerY
+   * @param {number} [margin=10] hide when (playerY - chunkMaxY) > margin
+   */
+  updateUndergroundCull(playerY, margin = 10) {
+    for (const xKey in this.chunkMeshes) {
+      const maxYCol = this.chunkMaxY[xKey];
+      const col = this.chunkMeshes[xKey];
+      for (const zKey in col) {
+        const maxY = maxYCol?.[zKey];
+        const aboveAll = maxY !== undefined && (playerY - maxY) > margin;
+        const types = col[zKey];
+        for (const k in types) {
+          const m = types[k];
+          const t = m.userData.type;
+          if (t === 'Stone' || t === 'Dirt' || t === 'Rock') {
+            m.visible = !aboveAll;
+          }
+        }
+      }
+    }
   }
 
   /**
