@@ -392,6 +392,14 @@ export class ChunkManager {
     mesh.userData.chunkZ = chunkZ;
     mesh.userData.type = type;
 
+    // Chunk meshes never move after creation. Disable matrix auto-update so
+    // Three.js's per-frame walk skips the updateMatrix call on every chunk
+    // mesh — at DR ≥ 12 that's hundreds of meshes the scene graph touches
+    // each frame for no reason. updateMatrixWorld(true) below populates the
+    // world matrix once; if a future feature needs to move a chunk mesh,
+    // set matrixAutoUpdate=true on it again.
+    mesh.matrixAutoUpdate = false;
+    mesh.updateMatrix();
     // Force matrixWorld now so raycasts (block break / placement / spring
     // arm) work before the next frame's auto-update.
     mesh.updateMatrixWorld(true);
@@ -770,6 +778,54 @@ export class ChunkManager {
     this._collCacheKeyX = null;
     this._collCacheKeyZ = null;
     this._collCacheResult = null;
+  }
+
+  /**
+   * Drop block data + per-chunk metadata for chunks outside `dataRadius`
+   * chunks of the player chunk. Mesh disposal is independent and already
+   * handled by updateScroll → _disposeQueue; this pass only frees the
+   * BLOCK ARRAYS in this.chunk[][], plus the chunkMaxY / chunkLOD entries
+   * that mirror them.
+   *
+   * Worker re-generates the data from the seed if the player returns;
+   * deterministic terrain noise means no visible change.
+   *
+   * @param {number} dataRadius keep data within this many chunks
+   */
+  evictDistantChunkData(dataRadius) {
+    const pcx = this._playerChunk.x;
+    const pcz = this._playerChunk.z;
+    let dropped = 0;
+    for (const xKey in this.chunk) {
+      const ix = +xKey;
+      const col = this.chunk[xKey];
+      if (!col) continue;
+      const dx = Math.abs(ix - pcx);
+      for (const zKey in col) {
+        const iz = +zKey;
+        if (dx > dataRadius || Math.abs(iz - pcz) > dataRadius) {
+          // Never evict data while the chunk still has a live mesh — the
+          // mesh references this data via face-culling on subsequent rebuilds
+          // (e.g. when a neighbour loads). Mesh disposal happens first via
+          // the scroll dispose queue; data eviction is a follow-up sweep.
+          if (this.chunkMeshes[ix]?.[iz]) continue;
+          delete col[iz];
+          if (this.chunkMaxY[ix]) delete this.chunkMaxY[ix][iz];
+          if (this.chunkLOD[ix]) delete this.chunkLOD[ix][iz];
+          this.chunkCount--;
+          dropped++;
+        }
+      }
+      // Garbage-collect empty column shells.
+      let empty = true;
+      for (const _ in col) { empty = false; break; }
+      if (empty) {
+        delete this.chunk[xKey];
+        if (this.chunkMaxY[xKey]) delete this.chunkMaxY[xKey];
+        if (this.chunkLOD[xKey]) delete this.chunkLOD[xKey];
+      }
+    }
+    return dropped;
   }
 
   /**
