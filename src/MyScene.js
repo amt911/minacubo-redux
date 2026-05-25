@@ -456,6 +456,20 @@ class MyScene extends THREE.Scene {
       activarWireframe: true,
       shadowsEnabled: true,
       shadowResolution: 1024,
+      // Half-extent of the sun's ortho shadow camera frustum (world units).
+      // Bigger = shadows reach further but each shadow-map texel covers more
+      // world area (softer edges). 32 ≈ 2.6 chunks on each side at TC=12.
+      shadowExtent: 32,
+      // Sun shadow map re-rendered every N frames. 1 = sharpest follow of
+      // moving sun + edited blocks, but pays full shadow pass every frame.
+      // 6 ≈ 100 ms lag at 60 FPS — invisible to the eye on a slow-moving sun
+      // but introduces snap on block edits. 3 is the sweet spot.
+      shadowRefreshFrames: 3,
+      // Chunk-radius around the player whose meshes keep castShadow=true.
+      // 0 = only player chunk; bigger = more chunks contribute, at higher
+      // shadow-pass draw call cost. Must be ≥ ceil(shadowExtent/TC) or the
+      // shadow camera's far cubes silently drop out.
+      shadowCasterRange: 3,
       cameraSensitivity: 1.0,
       renderDistance: MyScene._loadRenderDistance(),
     }
@@ -483,7 +497,7 @@ class MyScene extends THREE.Scene {
         this.renderer.shadowMap.needsUpdate = true;
       });
 
-    graficos.add(this.guiControls, 'shadowResolution', { '512': 512, '1024': 1024, '2048': 2048 })
+    graficos.add(this.guiControls, 'shadowResolution', { '512': 512, '1024': 1024, '2048': 2048, '4096': 4096 })
       .name('Shadow resolution')
       .onChange((v) => {
         this.sunLight.shadow.mapSize.set(v, v);
@@ -491,6 +505,30 @@ class MyScene extends THREE.Scene {
           this.sunLight.shadow.map.dispose();
           this.sunLight.shadow.map = null;
         }
+      });
+
+    graficos.add(this.guiControls, 'shadowExtent', 8, 96, 1)
+      .name('Shadow extent (units)')
+      .onChange((v) => {
+        const cam = this.sunLight.shadow.camera;
+        cam.left = -v; cam.right = v; cam.top = v; cam.bottom = -v;
+        cam.updateProjectionMatrix();
+        this.renderer.shadowMap.needsUpdate = true;
+      });
+
+    graficos.add(this.guiControls, 'shadowRefreshFrames', 1, 10, 1)
+      .name('Shadow refresh frames');
+
+    graficos.add(this.guiControls, 'shadowCasterRange', 0, 8, 1)
+      .name('Shadow caster radius (chunks)')
+      .onChange(() => {
+        // Re-apply castShadow on existing meshes immediately so the slider
+        // feels responsive instead of waiting for the 30-frame cull tick.
+        this.chunkManager.updateShadowCastersByDistance(
+          this.model.position.x,
+          this.model.position.z,
+          this.guiControls.shadowCasterRange,
+        );
       });
 
     graficos.add(this.guiControls, 'cameraSensitivity', 0.1, 3.0, 0.05)
@@ -575,12 +613,12 @@ class MyScene extends THREE.Scene {
     this.sunLight.castShadow = true;
     this.sunLight.shadow.mapSize.set(1024, 1024);
 
-    // Tight ortho frustum centred on the player (updateSunPosition follows).
-    // 16 units = ~3 chunks. Shadows beyond that distance are barely visible
-    // anyway and the shadow pass cost scales with the ortho area + the
-    // number of cubes inside it. Was 25 → ~40% fewer fragments in the
-    // shadow pass and sharper near-shadows from a 1024² shadow map.
-    const shadowExtent = 16;
+    // Ortho frustum half-extent centred on the player (updateSunPosition
+    // follows). Default 32 ≈ 2.6 chunks each direction at TC=12, sized to
+    // match `guiControls.shadowExtent`. The GUI slider can push this up if
+    // GPU headroom allows or down for low-end machines. Shadow-pass cost
+    // scales with the ortho area * number of casters inside.
+    const shadowExtent = this.guiControls.shadowExtent;
     const cam = this.sunLight.shadow.camera;
     cam.left = -shadowExtent;
     cam.right = shadowExtent;
@@ -795,20 +833,24 @@ class MyScene extends THREE.Scene {
       this.camera.position.copy(head).addScaledVector(postDir, this._springArmCachedDist);
     }
 
-    // Refresh shadow map every 6 frames — sun moves at TWEEN speed (full
-    // cycle = 60 s) and the player rarely moves blocks at >10 Hz, so a
-    // 100 ms shadow lag is below perceptual threshold. Roughly 6× cheaper
-    // than re-rendering the shadow pass every frame.
+    // Shadow map refresh cadence — set by GUI slider (default 3 = ~50 ms
+    // lag at 60 FPS, sweet spot between perceived snappiness and shadow
+    // pass cost). Bump to 1 for instant shadows at full cost; bump to 10+
+    // for cheaper but laggy shadows.
     if (!this._shadowFrame) this._shadowFrame = 0;
     this._shadowFrame++;
-    if (this._shadowFrame % 6 === 0) this.renderer.shadowMap.needsUpdate = true;
+    const shadowEvery = this.guiControls.shadowRefreshFrames | 0 || 3;
+    if (this._shadowFrame % shadowEvery === 0) this.renderer.shadowMap.needsUpdate = true;
 
-    // Cull distant shadow casters every 30 frames (~0.5 s). The shadow
-    // camera frustum only covers ~3 chunks around the player so meshes
-    // further away never write to the shadow map; toggling castShadow off
-    // saves their per-mesh setup in the shadow pass.
+    // Cull distant shadow casters every 30 frames (~0.5 s). Range is GUI-
+    // controlled so the player can trade shadow draw distance against
+    // shadow-pass cost without editing source.
     if (this._shadowFrame % 30 === 0) {
-      this.chunkManager.updateShadowCastersByDistance(this.model.position.x, this.model.position.z);
+      this.chunkManager.updateShadowCastersByDistance(
+        this.model.position.x,
+        this.model.position.z,
+        this.guiControls.shadowCasterRange,
+      );
       this.chunkManager.updateUndergroundCull(this.model.position.y);
     }
 
