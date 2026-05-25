@@ -246,10 +246,17 @@ export class ChunkManager {
       //      below drops the ones that are still fully neighboured (flat
       //      terrain stays at ~1 block per column), but cliffs render with
       //      their full visible height.
+      // Compute top Y per (x, z) column from GROUND blocks only. Skipping
+      // tree blocks here was the missing bit — when a tree sat in a column,
+      // its leaf canopy at y ≈ grass+5 became the column "top", and the
+      // 3-block fill window then started at canopy-3 instead of grass-3,
+      // dropping the grass/dirt under the trunk and leaving a hole in the
+      // terrain directly beneath every tree.
       /** @type {Map<number, number>} */
       const topYByCol = new Map();
       for (let i = 0; i < blocks.length; i++) {
         const b = blocks[i];
+        if (b.material === 'OakWood' || b.material === 'OakLeaves') continue;
         const colKey = (b.x + 32768) * 65536 + (b.z + 32768);
         const prev = topYByCol.get(colKey);
         if (prev === undefined || b.y > prev) topYByCol.set(colKey, b.y);
