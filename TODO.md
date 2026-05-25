@@ -113,6 +113,11 @@ Mejorar la gestión de chunks:
 - [x] LOD chunks distantes (FAR ring emite solo top-of-column, **fps +12%, p99 -25%, tris -27%** según bench)
 - [x] Adaptive LOD (auto-tune lodNearRadius por FPS: shrink si <30, grow si >55, cooldown 3s)
 - [x] HUD muestra LOD radius + adaptive on/off
+- [x] mesh.matrixAutoUpdate=false en chunk meshes (no se mueven, evita updateMatrix per-frame)
+- [x] LRU eviction de chunk block data lejana (memory leak fix — worker re-gen on return)
+- [x] Skip shadow pass cuando sun.intensity < 0.65 (noche = shadows imperceptibles vs ambient)
+- [x] Tree-hole bug fixed (topYByCol excluye leaves/wood — grass bajo trunk se mantiene en LOD FAR)
+- [x] LOD FAR mejora visual: keep top + 3 abajo (cliff faces correctos) + trees full detail (no leaves flotando)
 
 **Cumulative bench impact (initial → final, headless software GL, DR=12):**
 - fps_avg `3.41 → 5.06` **(+48%)**
@@ -136,6 +141,19 @@ Mejorar la gestión de chunks:
 - [ ] DR adaptativo: si fps < 30, bajar DR temporalmente; si > 55, subir
 - [ ] OffscreenCanvas: render en worker (Chrome/Firefox support, no Safari aún)
 - [ ] Material/shader instancing: GrassSide+GrassTop+GrassBottom como sub-mesh con custom shader que sample texture por face → un solo material por block type
+
+### Nuevas ideas (brainstorm reciente)
+
+- [ ] **TypedArray block storage** (reemplazar `{x,y,z,material}` objects con parallel Int16Array(x), Int16Array(z), Int8Array(y2), Uint8Array(materialIdx). 4 bytes/block vs ~100. Memory + cache locality + transferable via worker)
+- [ ] **Combine all chunks of same material into one mega-mesh** (1 draw call por material global. Loses per-chunk culling pero brutalmente menos draw calls)
+- [ ] **Worker mesh-prep pipeline**: worker genera blocks + pre-groups + pre-computes occupancy. Main thread sólo InstancedMesh alloc + setMatrixAt. Requiere TypedArray storage primero.
+- [ ] **Block edits as instance count tweaks**: pre-alloc InstancedMesh con capacity > exact count, on add/remove bump count + setMatrixAt slot único (no full rebuild)
+- [ ] **Lazy chunk gen direccional**: solo gen chunks en cono frontal del player (180°). Reduce queue 50%.
+- [ ] **Pool block objects en chunkGen** (alloc once, reuse across chunks via free list)
+- [ ] **Pre-gen pre-emptive**: worker genera 1 ring extra mientras idle, jugador no espera al llegar
+- [ ] **NPC update skip cuando lejos/invisible**: zombie + pig sólo animate si dentro de frustum + radius limit
+- [ ] **DR cap dinámico (max safe DR)** detectar GPU tier (renderer.info de primera frame), settear DR sensible
+- [ ] **GUI toggle "skip night shadows"** (actual hardcoded threshold 0.65, podría ser slider)
 - [ ] **PR comment con tabla diff** (workflow_dispatch "promote" para actualizar bench/baseline.json automáticamente)
 
 ## Fase 6 — Ambicioso

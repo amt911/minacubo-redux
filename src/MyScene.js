@@ -974,11 +974,17 @@ class MyScene extends THREE.Scene {
     // Shadow map refresh cadence — set by GUI slider (default 3 = ~50 ms
     // lag at 60 FPS, sweet spot between perceived snappiness and shadow
     // pass cost). Bump to 1 for instant shadows at full cost; bump to 10+
-    // for cheaper but laggy shadows.
+    // for cheaper but laggy shadows. Also skip the shadow pass entirely
+    // when the sun is below the "barely illuminates" threshold — shadows
+    // at sun.intensity ≤ 0.65 are imperceptible against the ambient
+    // baseline and the shadow pass is the single most expensive render
+    // pass at high DR.
     if (!this._shadowFrame) this._shadowFrame = 0;
     this._shadowFrame++;
     const shadowEvery = this.guiControls.shadowRefreshFrames | 0 || 3;
-    if (this._shadowFrame % shadowEvery === 0) this.renderer.shadowMap.needsUpdate = true;
+    if (this._shadowFrame % shadowEvery === 0 && this.sunLight.intensity > 0.65) {
+      this.renderer.shadowMap.needsUpdate = true;
+    }
 
     // Cull distant shadow casters every 30 frames (~0.5 s). Range is GUI-
     // controlled so the player can trade shadow draw distance against
