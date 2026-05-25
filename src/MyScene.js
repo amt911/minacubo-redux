@@ -18,6 +18,7 @@ import { NPCManager } from './NPCManager.js'
 
 import { BLOCK_TYPES, blockMaterials, blockGeometries } from './BlockRegistry.js'
 import { HUD } from './HUD.js'
+import { HordeRenderer } from './HordeRenderer.js'
 import * as PM from './ParametrosMundo.js'
 import { identifyChunk } from './chunkMath.js'
 
@@ -170,6 +171,10 @@ class MyScene extends THREE.Scene {
     });
 
     this.hud = new HUD();
+
+    // Horde zombies render via shared InstancedMesh per body part — turns
+    // a 36-draw-call zombie into a constant 36 draw calls for the whole horde.
+    this.hordeRenderer = new HordeRenderer(this, 128);
 
     this.npcManager = new NPCManager({
       zombie:            this.zombie,
@@ -728,7 +733,6 @@ class MyScene extends THREE.Scene {
       const z = p.z + Math.sin(angle) * r;
 
       const zombie = new Zombie(null, '');
-      this.enableShadowsOnSubtree(zombie);
       // Spawn at player's exact Y + small lift. Spawning far above the player
       // risks dropping the zombie into a hill at (x,z) where terrain rises
       // above p.y, getting it stuck inside blocks on landing.
@@ -740,6 +744,10 @@ class MyScene extends THREE.Scene {
       // sees the spawned position instead of the default (0,0,0) parent matrix.
       zombie.updateMatrixWorld(true);
       this.npcManager.addZombie(zombie);
+      // Hand off rendering to the InstancedMesh pool — hides the per-zombie
+      // meshes and adds an instance slot. Shadows are off horde-wide (one
+      // castShadow flag per InstancedMesh, can't toggle per instance).
+      this.hordeRenderer.add(zombie);
     }
   }
 
@@ -1127,9 +1135,11 @@ class MyScene extends THREE.Scene {
     }
 
     this.npcManager.update(delta);
-    
 
-
+    // Sync horde instance matrices from each zombie's body-part matrixWorld.
+    // Must run AFTER NPCManager (which moves zombies) so the next frame's
+    // render sees fresh transforms.
+    this.hordeRenderer.update();
 
     requestAnimationFrame(() => this.update())
   }

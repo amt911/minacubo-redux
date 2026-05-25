@@ -81,15 +81,14 @@ class Zombie extends NPC {
     this.physics = new C.Collisions(true, 0.8);
     this.height = 32;
 
+    // Named refs to each rendered body part — HordeRenderer pulls
+    // matrixWorld from these to populate its InstancedMesh slots.
+    this._parts = { cabeza, brazoL, brazoR, piernaL, piernaR, torso };
+
     // Cache the rendered sub-meshes so NPCManager can toggle castShadow in
     // O(1) per zombie instead of re-traversing the body graph every cull tick.
     /** @type {THREE.Mesh[]} */
-    this._renderMeshes = [];
-    this.traverse((child) => {
-      if (/** @type {any} */ (child).isMesh) {
-        this._renderMeshes.push(/** @type {THREE.Mesh} */ (child));
-      }
-    });
+    this._renderMeshes = [cabeza, brazoL, brazoR, piernaL, piernaR, torso];
     // Track current shadow state so we only mutate on transitions.
     this._castShadow = true;
   }
