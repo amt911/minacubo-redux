@@ -825,7 +825,16 @@ class MyScene extends THREE.Scene {
       const now = performance.now();
       if (!this._feedbackNext || now >= this._feedbackNext) {
         this.updateFeedback();
-        this._feedbackNext = now + 100;
+        // 100 ms while the player is actively interacting (moving, looking
+        // around via pointer-lock, holding any key); 500 ms when truly idle.
+        // The raycast walks all live chunk meshes — at DR ≥ 16 that's
+        // hundreds of meshes per call, so cutting it 5× when nothing is
+        // happening is essentially free perf.
+        const km = this.input.keyMap;
+        let anyKey = false;
+        for (const k in km) { if (km[k]) { anyKey = true; break; } }
+        const interactive = anyKey || document.pointerLockElement === this.renderer.domElement;
+        this._feedbackNext = now + (interactive ? 100 : 500);
       }
     }
     else {

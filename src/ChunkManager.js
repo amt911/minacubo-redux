@@ -62,6 +62,13 @@ export class ChunkManager {
     /** @type {Array<{chunkX:number, chunkZ:number}>} */
     this._meshQueue = [];
 
+    // Dispose queue — scroll events can flag dozens of chunks for disposal
+    // at once and each mesh.dispose() is sync WebGL work, so batching them
+    // all in one frame produced a visible hitch on every chunk crossing.
+    // tick() drains this with its own time budget after the build queue.
+    /** @type {Array<[number, number]>} */
+    this._disposeQueue = [];
+
     // Exponential moving average of single-chunk build time (ms). Exposed
     // for the in-game perf HUD.
     this._buildTimeAvgMs = 0;
@@ -377,9 +384,24 @@ export class ChunkManager {
   }
 
   /**
-   * Drain a few mesh builds from the queue. Call once per frame.
+   * Drain pending mesh disposals + a few mesh builds from their queues.
+   * Call once per frame.
    */
   tick() {
+    // Disposals run first and on their own (~2 ms) budget so a deep
+    // dispose backlog doesn't get starved when the build queue is also
+    // full. Each mesh.dispose() releases GPU resources synchronously and
+    // costs ~0.1 ms, so 2 ms ≈ 20 meshes per frame.
+    if (this._disposeQueue.length > 0) {
+      const dStart = performance.now();
+      while (this._disposeQueue.length > 0 && performance.now() - dStart < 2) {
+        const [cx, cz] = this._disposeQueue.shift();
+        // Skip if the chunk was re-queued by updateScroll into the visible
+        // window before we got here (mesh still wanted).
+        if (this.chunkMeshes[cx]?.[cz]) this._disposeChunkMesh(cx, cz);
+      }
+    }
+
     if (this._meshQueue.length === 0) return;
 
     const { min, max } = this.chunkMinMax;
@@ -437,10 +459,12 @@ export class ChunkManager {
 
     if (!moved) return false;
 
-    // Dispose every mesh outside the new window+R. Scan chunkMeshes keys
-    // directly (not the old window bounds) because tick() may have built
-    // meshes for chunks that arrived from workers after we'd already
-    // scrolled past their origin window — those would leak otherwise.
+    // Queue (don't run) mesh disposals for chunks outside the new window+R.
+    // Synchronous disposal here used to spike the scroll frame by 5-20 ms on
+    // a wide DR (hundreds of meshes cleared in one go); deferring to the
+    // tick loop spreads the cost over multiple frames. Scan chunkMeshes
+    // keys directly (not old window bounds) because tick() may have built
+    // meshes that arrived from workers after we'd already scrolled past.
     const R = ChunkManager.PRELOAD_RING;
     for (const xKey in this.chunkMeshes) {
       const i = +xKey;
@@ -448,7 +472,7 @@ export class ChunkManager {
       for (const zKey in col) {
         const a = +zKey;
         if (i < min.x - R || i > max.x + R || a < min.z - R || a > max.z + R) {
-          this._disposeChunkMesh(i, a);
+          this._disposeQueue.push([i, a]);
         }
       }
     }
