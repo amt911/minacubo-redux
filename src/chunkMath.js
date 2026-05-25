@@ -36,6 +36,26 @@ export function chunkToWorld(chunkX, chunkZ, tamChunk) {
 }
 
 /**
+ * True if (chunkX, chunkZ) sits inside the visible window plus an R-chunk
+ * preload ring around it. Single source of truth used by ChunkManager.tick
+ * (drop stale mesh-builds), _genChunkAsync.then (drop late worker results),
+ * and evictDistantChunkData (cull strays). Centralising it avoids the kind
+ * of off-by-one drift that let the chunk leak grow to 5000+ entries.
+ *
+ * @param {number} chunkX
+ * @param {number} chunkZ
+ * @param {ChunkMinMax} minMax
+ * @param {number} preloadRing
+ * @returns {boolean}
+ */
+export function isChunkInWindow(chunkX, chunkZ, minMax, preloadRing) {
+  return chunkX >= minMax.min.x - preloadRing
+      && chunkX <= minMax.max.x + preloadRing
+      && chunkZ >= minMax.min.z - preloadRing
+      && chunkZ <= minMax.max.z + preloadRing;
+}
+
+/**
  * Apply the visible-window shift rule from `MyScene.update`. If the player is
  * past the midpoint of the current window on either axis, the window slides
  * one chunk in that direction. Returns a *new* {min, max} (does not mutate).

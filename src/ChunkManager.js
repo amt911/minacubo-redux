@@ -1,6 +1,6 @@
 // @ts-check
 import * as THREE from 'three';
-import { identifyChunk } from './chunkMath.js';
+import { identifyChunk, isChunkInWindow } from './chunkMath.js';
 import { createTerrainNoise, terrainHeight } from './noise.js';
 import { generateChunkBlocks } from './chunkGen.js';
 import { blockCastsShadow } from './BlockRegistry.js';
@@ -565,8 +565,7 @@ export class ChunkManager {
     while (this._meshQueue.length > 0 && performance.now() - start < 6) {
       const { chunkX, chunkZ } = this._meshQueue.shift();
       if (this.chunkMeshes[chunkX]?.[chunkZ]) continue;
-      if (chunkX < min.x - R || chunkX > max.x + R ||
-          chunkZ < min.z - R || chunkZ > max.z + R) continue;
+      if (!isChunkInWindow(chunkX, chunkZ, this.chunkMinMax, R)) continue;
       this._buildChunkMesh(chunkX, chunkZ);
     }
   }
@@ -630,10 +629,7 @@ export class ChunkManager {
             // Drop the result if the chunk is no longer inside the current
             // window+ring — otherwise it'd be stored and immediately queued
             // for eviction, wasting both the build and the dispose budget.
-            const cur = this.chunkMinMax;
-            const Rr = ChunkManager.PRELOAD_RING;
-            if (i < cur.min.x - Rr || i > cur.max.x + Rr ||
-                a < cur.min.z - Rr || a > cur.max.z + Rr) return;
+            if (!isChunkInWindow(i, a, this.chunkMinMax, ChunkManager.PRELOAD_RING)) return;
             this._storeChunkData(i, a, blocks);
             this._meshQueue.push({ chunkX: i, chunkZ: a });
           });
