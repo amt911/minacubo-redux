@@ -79,7 +79,7 @@ export class NPCManager {
 
       const zChunk = identifyChunk(z.position.x, z.position.z, this._TAM_CHUNK);
       const zCols = this._chunkManager.getCollisionsAround(zChunk, NPCManager.NPC_PHYSICS_RADIUS);
-      z.update(zCols);
+      z.update(zCols, delta);
     }
 
     // Pig — waypoint patrol

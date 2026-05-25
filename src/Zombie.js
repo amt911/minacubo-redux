@@ -279,10 +279,15 @@ class Zombie extends NPC {
     }
   }
 
-  update(bloques) {
-    if (this.guiControls.moviendose) {
-      this._stepPhysics(bloques, this.clock.getDelta());
-    }
+  /**
+   * @param {Array} bloques
+   * @param {number} [delta] optional shared delta; if omitted falls back to
+   *   internal clock (kept for backwards compatibility with the GUI toggle).
+   */
+  update(bloques, delta) {
+    if (!this.guiControls.moviendose) return;
+    const dt = delta ?? this.clock.getDelta();
+    this._stepPhysics(bloques, dt);
   }
 }
 

@@ -716,22 +716,29 @@ class MyScene extends THREE.Scene {
   }
 
   /**
-   * Spawn `count` zombies in a ring around the player at 8–13 units radius.
+   * Spawn `count` zombies in a ring around the player at 6–10 units radius.
    * @param {number} count
    */
   spawnZombieHorde(count) {
     const p = this.model.position;
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4;
-      const r = 8 + Math.random() * 5;
+      const r = 6 + Math.random() * 4;
       const x = p.x + Math.cos(angle) * r;
       const z = p.z + Math.sin(angle) * r;
 
       const zombie = new Zombie(null, '');
       this.enableShadowsOnSubtree(zombie);
-      zombie.position.set(x, p.y + 5, z);
-      zombie.boundingBox.position.set(x, p.y + 5 + 16 / PM.PIXELES_ESTANDAR, z);
+      // Spawn at player's exact Y + small lift. Spawning far above the player
+      // risks dropping the zombie into a hill at (x,z) where terrain rises
+      // above p.y, getting it stuck inside blocks on landing.
+      const spawnY = p.y + 1;
+      zombie.position.set(x, spawnY, z);
+      zombie.boundingBox.position.set(x, spawnY + 16 / PM.PIXELES_ESTANDAR, z);
       this.add(zombie);
+      // Force world matrix refresh so the next NPCManager.update() lookAt
+      // sees the spawned position instead of the default (0,0,0) parent matrix.
+      zombie.updateMatrixWorld(true);
       this.npcManager.addZombie(zombie);
     }
   }
@@ -1109,6 +1116,9 @@ class MyScene extends THREE.Scene {
 
     // Death / respawn
     if (this.model.isDead && !this.hud.gameOverShown) {
+      // Release pointer lock so the cursor reappears and the user can
+      // actually aim at the Respawn button (locked mode = hidden cursor).
+      if (document.pointerLockElement) document.exitPointerLock();
       this.hud.showGameOver(() => {
         const spawnX = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2;
         const spawnZ = (this.DISTANCIA_RENDER * this.TAM_CHUNK) / 2;
