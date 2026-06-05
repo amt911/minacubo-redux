@@ -561,6 +561,9 @@ class MyScene extends THREE.Scene {
       // are cooled down (3 s between changes) to avoid oscillation.
       adaptiveLOD: true,
       cameraSensitivity: 1.0,
+      // Force-hide the "Haz clic para jugar" overlay (toggles body class).
+      // Lets the world be screenshotted without the prompt on top.
+      hidePointerOverlay: false,
       renderDistance: MyScene._loadRenderDistance(),
     }
 
@@ -581,6 +584,7 @@ class MyScene extends THREE.Scene {
       lodNearRadius: 4,
       adaptiveLOD: true,
       cameraSensitivity: 1.0,
+      hidePointerOverlay: false,
     };
 
     const folder = gui.addFolder('Ayudas');
@@ -593,6 +597,11 @@ class MyScene extends THREE.Scene {
     folder.add(this.guiControls, 'activarWireframe')
       .name('Mostrar feedback (raycast a 10Hz)')
       .listen();
+
+    folder.add(this.guiControls, 'hidePointerOverlay')
+      .name('Ocultar aviso "click para jugar"')
+      .listen()
+      .onChange((value) => this.setPointerOverlayHidden(value));
 
     const graficos = gui.addFolder('Graphics');
 
@@ -888,6 +897,10 @@ class MyScene extends THREE.Scene {
 
   setAxisVisible(valor) {
     this.axis.visible = valor;
+  }
+
+  setPointerOverlayHidden(hidden) {
+    document.body.classList.toggle('hide-pointer-overlay', hidden);
   }
 
   createRenderer(myCanvas) {
