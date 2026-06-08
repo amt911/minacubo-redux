@@ -101,3 +101,10 @@ img{
 body.pointer-locked #pointer-lock-overlay {
   opacity: 0;
 }
+
+/* Force-hide the "Haz clic para jugar" overlay regardless of lock state —
+   toggled from the GUI (Ayudas > Ocultar aviso "click para jugar") so the
+   world can be screenshotted without the prompt covering it. */
+body.hide-pointer-overlay #pointer-lock-overlay {
+  display: none;
+}
