@@ -103,6 +103,7 @@ Once a PR exists, a local headless `claude -p` agent can drive the running game 
 
 ## Working rules
 
+- **UI work → design context first, then `impeccable` + superpowers** — for any UI change (the DOM chrome: lil-gui HUD, menus, overlays — the 3D world is out of scope), invoke the `impeccable` skill. **If the project has no design context (`PRODUCT.md` / `DESIGN.md` at the repo root), run `$impeccable teach`** — it explores the codebase and interviews you about the project's direction, then writes `PRODUCT.md` + `DESIGN.md` (auto-migrating a legacy `.impeccable.md` → `PRODUCT.md`); never hand-author it. Don't hand-roll UI without impeccable + superpowers.
 - **Deps via npm + importmap** — añadir un paquete: `npm install <pkg>` + entrada nueva en el importmap de `index.html` apuntando a `/node_modules/<pkg>/...`. Imports en JS usan bare specifiers (`import x from 'pkg'`).
 - **No bundler** — el navegador resuelve módulos vía importmap. Vite/webpack romperían el modelo.
 - **`PIXELES_ESTANDAR` is 16** — all size calculations derive from this. Don't hardcode `16` without referencing `PM.PIXELES_ESTANDAR`.
