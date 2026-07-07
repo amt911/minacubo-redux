@@ -93,6 +93,14 @@ For new pure logic (chunk math, collision, structure generation):
 
 Don't TDD rendering code or Three.js scene construction — not testable without a WebGL context.
 
+## Agentic PR verification
+
+Once a PR exists, a local headless `claude -p` agent can drive the running game in a browser (**Playwright MCP** against the dev server on `localhost:8080`) and post a verdict via `gh pr comment`, awaiting your close — it never merges.
+
+- **Caveat for a WebGL canvas.** There's no DOM accessibility tree inside the Three.js canvas, so the agent can't navigate 3D content by role/label — its reach is a **boot/smoke check** (page loads, canvas renders, no console errors, the lil-gui HUD is present) plus any DOM UI. Deep behavior stays with the deterministic unit tests.
+- **Two layers.** The Vitest unit tests on pure logic (`chunkMath`, `colisiones`, `estructuras`, `noise`) are the **hard merge gate**; the agentic pass is advisory (boot/smoke + a readable verdict). It never vetoes a merge on its own.
+- **Hard limits.** The verdict awaits your close and the agent **never merges** (see *Git & GitHub*). Scope `--allowedTools`; use `--dangerously-skip-permissions` only in a controlled local env.
+
 ## Working rules
 
 - **Deps via npm + importmap** — añadir un paquete: `npm install <pkg>` + entrada nueva en el importmap de `index.html` apuntando a `/node_modules/<pkg>/...`. Imports en JS usan bare specifiers (`import x from 'pkg'`).
@@ -100,3 +108,10 @@ Don't TDD rendering code or Three.js scene construction — not testable without
 - **`PIXELES_ESTANDAR` is 16** — all size calculations derive from this. Don't hardcode `16` without referencing `PM.PIXELES_ESTANDAR`.
 - **Chunk rebuild is expensive** — don't trigger `renderChunksAgain` unnecessarily. Block add/remove already rebuilds only the affected material mesh.
 - **`estaColindando` / `estaEnArbol`** are O(n) scans on small lists — fine for current chunk sizes, but mark if chunk size grows significantly.
+
+## Git & GitHub
+
+- **Commits and branches OK** — create commits and new branches whenever it makes sense, without asking first.
+- **Never push** — no `git push` under any circumstance, and never `git push --force` / `--force-with-lease`. Leave pushing to the user.
+- **Never merge — no permission** — no `git merge`, no fast-forward integration, no `gh pr merge`, and no merging of any pull request. Leave every merge to the user.
+- **GitHub via `gh`** — open PRs, issues, comments, and labels over branches the user has already pushed.
