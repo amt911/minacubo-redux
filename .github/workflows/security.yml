@@ -1,0 +1,63 @@
+# Security scanning — SAST + dependency audit, separate from the lint/typecheck/test
+# gate in ci.yml so a security finding doesn't hide behind an unrelated failure.
+#
+# - sast (Semgrep): verified 0 findings locally (2026-07-08) against
+#   p/javascript + p/typescript + p/secrets, so it's BLOCKING (--error). If a future
+#   run introduces findings that need triage, drop --error and add continue-on-error
+#   to keep CI green while the finding is investigated.
+# - dependency-audit: BLOCKING on production dependencies (npm audit --omit=dev).
+#   Verified 0 vulnerabilities in `dependencies` (three, @tweenjs/tween.js, lil-gui,
+#   simplex-noise) as of 2026-07-08. Known highs in devDependencies (undici, vite —
+#   transitive via puppeteer-core/vitest tooling) are dev-only, never shipped to the
+#   browser bundle, and intentionally excluded via --omit=dev so they don't block CI.
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Semgrep scan
+        run: |
+          semgrep scan \
+            --config p/javascript \
+            --config p/typescript \
+            --config p/secrets \
+            --error \
+            --metrics off \
+            --exclude '**/*.test.js'
+
+  dependency-audit:
+    name: Dependency audit (npm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Verify lockfile is honest
+        run: npm ci --ignore-scripts
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level high
