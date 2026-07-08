@@ -93,13 +93,26 @@ For new pure logic (chunk math, collision, structure generation):
 
 Don't TDD rendering code or Three.js scene construction — not testable without a WebGL context.
 
-## Agentic PR verification
+## Agentic PR verification (MANDATORY on every PR)
 
-Once a PR exists, a local headless `claude -p` agent can drive the running game in a browser (**Playwright MCP** against the dev server on `localhost:8080`) and post a verdict via `gh pr comment`, awaiting your close — it never merges.
+**Every PR MUST be verified end-to-end before merge, and the verdict MUST be posted as a PR
+comment** via `gh pr comment`. A local headless `claude -p` agent drives the running game in a
+browser (**Playwright MCP** against the dev server on `localhost:8080`) and posts the result; it
+**never merges** — it waits for you. Running the pass and posting the verdict comment is **not
+optional**. It catches what the diff and unit tests miss: missing buttons, unimplemented content,
+dead flows, off-spec screens.
 
-- **Caveat for a WebGL canvas.** There's no DOM accessibility tree inside the Three.js canvas, so the agent can't navigate 3D content by role/label — its reach is a **boot/smoke check** (page loads, canvas renders, no console errors, the lil-gui HUD is present) plus any DOM UI. Deep behavior stays with the deterministic unit tests.
-- **Two layers.** The Vitest unit tests on pure logic (`chunkMath`, `colisiones`, `estructuras`, `noise`) are the **hard merge gate**; the agentic pass is advisory (boot/smoke + a readable verdict). It never vetoes a merge on its own.
-- **Hard limits.** The verdict awaits your close and the agent **never merges** (see *Git & GitHub*). Scope `--allowedTools`; use `--dangerously-skip-permissions` only in a controlled local env.
+- **Engine + caveat for a WebGL canvas.** Playwright MCP against `localhost:8080`. There's no DOM
+  accessibility tree inside the Three.js canvas, so the agent can't navigate 3D content by
+  role/label — its reach is a **boot/smoke check** (page loads, canvas renders, no console errors,
+  the lil-gui HUD is present) plus any DOM UI. Deep behavior stays with the deterministic unit tests.
+- **Two layers.** The Vitest unit tests on pure logic (`chunkMath`, `colisiones`, `estructuras`,
+  `noise`) stay the **hard merge gate**; the agentic pass (boot/smoke + a readable verdict) is
+  advisory and never vetoes a merge on its own — but running it and posting the verdict comment
+  is mandatory.
+- **Hard limits.** The verdict awaits your close and the agent **never merges** (see *Git &
+  GitHub*). Scope `--allowedTools`; use `--dangerously-skip-permissions` only in a controlled
+  local env.
 
 ## Working rules
 
