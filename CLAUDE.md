@@ -15,6 +15,35 @@ Run `/graphify` before each session. The graph at `graphify-out/graph.json` maps
 
 Outputs in `graphify-out/`: `graph.json`, `GRAPH_REPORT.md`, `graph.html`.
 
+## 🧠 Heavy jobs run inside a memory cgroup (MANDATORY)
+
+**No exceptions:** any long or parallel job started here — the full test suite, coverage, mutation
+testing, a production build, Playwright, a `turbo`/workspace fan-out, anything that spawns workers —
+runs under a kernel-enforced memory ceiling:
+
+```bash
+systemd-run --user --scope --quiet -p MemoryHigh=5G -p MemoryMax=6G -p MemorySwapMax=0 -- <command>
+```
+
+**6 GB is the standing ceiling on this machine** (raised from 4 GB by the user on 2026-08-11); don't
+exceed it without being told to. `MemoryHigh` throttles and reclaims, `MemoryMax` is the hard stop,
+`MemorySwapMax=0` keeps the job from thrashing swap instead of respecting either. Verify it is
+actually in force rather than assuming:
+`systemctl --user show <scope> -p MemoryMax -p MemoryHigh -p MemoryCurrent`.
+
+**Cap the tool too — but never *instead* of the cgroup.** Pass the tool's own concurrency limit
+(`--concurrency`, `--maxWorkers`, `workers`, `--parallel`) so the job isn't throttled to a crawl by
+the ceiling. A tool's default concurrency is not a budget, and an estimate of per-worker RSS is not a
+ceiling. Only the cgroup is.
+
+**Why this is a rule and not advice:** a mutation-testing run on this 24-core box sized its worker
+pool from the core count and spawned **23 workers at ~2.3 GB each** — ~50 GB of demand on 31 GB of
+RAM. It took the whole machine down hard enough that the user had to power-cycle it; `systemd-oomd`
+did not save it. The run before that was wasted too: with the machine starving, **139 of the first
+142 mutants "timed out"**, and a timeout is scored as *killed*, so the result came out inflated by
+starvation and meant nothing. A job that OOMs the box doesn't merely fail — it also hands you
+numbers you'd trust by mistake.
+
 ## Stack
 
 - **Three.js** (r140) — `three` npm package, imported via importmap
@@ -116,6 +145,10 @@ dead flows, off-spec screens.
 
 ## Working rules
 
+- **Heavy or parallel jobs run inside a memory cgroup** — never launch a suite, build or
+  fan-out on a bare estimate; wrap it in
+  `systemd-run --user --scope -p MemoryHigh=5G -p MemoryMax=6G -p MemorySwapMax=0 -- <command>`
+  and cap the tool's own concurrency too.
 - **UI work → design context first, then `impeccable` + superpowers** — for any UI change (the DOM chrome: lil-gui HUD, menus, overlays — the 3D world is out of scope), invoke the `impeccable` skill. **If the project has no design context (`PRODUCT.md` / `DESIGN.md` at the repo root), run `$impeccable teach`** — it explores the codebase and interviews you about the project's direction, then writes `PRODUCT.md` + `DESIGN.md` (auto-migrating a legacy `.impeccable.md` → `PRODUCT.md`); never hand-author it. Don't hand-roll UI without impeccable + superpowers.
 - **Deps via npm + importmap** — añadir un paquete: `npm install <pkg>` + entrada nueva en el importmap de `index.html` apuntando a `/node_modules/<pkg>/...`. Imports en JS usan bare specifiers (`import x from 'pkg'`).
 - **No bundler** — el navegador resuelve módulos vía importmap. Vite/webpack romperían el modelo.
