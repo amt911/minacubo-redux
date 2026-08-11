@@ -31,7 +31,7 @@ exceed it without being told to. `MemoryHigh` throttles and reclaims, `MemoryMax
 actually in force rather than assuming:
 `systemctl --user show <scope> -p MemoryMax -p MemoryHigh -p MemoryCurrent`.
 
-**Cap the tool too — but never _instead_ of the cgroup.** Pass the tool's own concurrency limit
+**Cap the tool too — but never *instead* of the cgroup.** Pass the tool's own concurrency limit
 (`--concurrency`, `--maxWorkers`, `workers`, `--parallel`) so the job isn't throttled to a crawl by
 the ceiling. A tool's default concurrency is not a budget, and an estimate of per-worker RSS is not a
 ceiling. Only the cgroup is.
@@ -40,7 +40,7 @@ ceiling. Only the cgroup is.
 pool from the core count and spawned **23 workers at ~2.3 GB each** — ~50 GB of demand on 31 GB of
 RAM. It took the whole machine down hard enough that the user had to power-cycle it; `systemd-oomd`
 did not save it. The run before that was wasted too: with the machine starving, **139 of the first
-142 mutants "timed out"**, and a timeout is scored as _killed_, so the result came out inflated by
+142 mutants "timed out"**, and a timeout is scored as *killed*, so the result came out inflated by
 starvation and meant nothing. A job that OOMs the box doesn't merely fail — it also hands you
 numbers you'd trust by mistake.
 
