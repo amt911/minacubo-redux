@@ -147,6 +147,14 @@ What "real environment" means here, concretely:
   request *is* the missing-dependency error you would otherwise get at build time.
 - **More than one browser.** Import maps, ESM specifier resolution and WebGL extension availability
   differ per engine. What Chrome resolves, Firefox may not.
+- **If this is ever wrapped for mobile** (Capacitor, a TWA, or a native shell), the engine for that
+  build is **Maestro** — YAML flows in `.maestro/` against the real APK on an emulator, with
+  `maestro hierarchy` and `maestro mcp` for discovery (`maestro studio` no longer exists in Maestro
+  2.x) — never a Playwright `devices[...]` descriptor, which is a viewport and not a device. Note it
+  buys less here than elsewhere: `maestro hierarchy` sees the WebView or the GL surface as **one
+  opaque node**, exactly as the agentic pass already finds with the Three.js canvas. It would prove
+  the app boots, gets a GL context and shows the HUD; the deterministic seed-to-terrain checks stay
+  the real gate.
 - **A fixed seed.** The terrain noise is deterministic (`createTerrainNoise(seed?)` = simplex +
   inline Mulberry32). That determinism is the only thing that makes a visual check meaningful.
 
