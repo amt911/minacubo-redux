@@ -112,6 +112,17 @@ npm run test:coverage
 
 Keep tests in `*.test.js` files beside the source. Three.js classes can be mocked — only test pure data transformations, not rendering.
 
+**Mutation gate: 60% floor — owed, and blocked on there being a suite at all.** Once the pure-logic
+tests above exist, coverage will say how much of that logic ran and still nothing will say whether
+those tests *verify* anything: a test with no assert reports 100% coverage. The gate that answers
+that is **Stryker** with the vitest runner, `mutate` scoped to exactly the modules in the table
+(collision, chunk math, structure arrays — never the Three.js/rendering side, which cannot be
+mutated honestly without a WebGL context), `thresholds.break` set to the **measured** score rounded
+down and never below 60. It runs last in a `pre-push` hook — this repo has none yet — and as a
+PR-only advisory job in `ci.yml`. **Measure before writing any number:** a threshold nobody measured
+is a gate that has never been tested. Note `npm test` currently passes with `--passWithNoTests`, so
+today it proves nothing at all.
+
 ### TDD
 
 For new pure logic (chunk math, collision, structure generation):
