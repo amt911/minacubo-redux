@@ -236,6 +236,7 @@ dead flows, off-spec screens.
 - **Deps via npm + importmap** — añadir un paquete: `npm install <pkg>` + entrada nueva en el importmap de `index.html` apuntando a `/node_modules/<pkg>/...`. Imports en JS usan bare specifiers (`import x from 'pkg'`).
 - **No bundler** — el navegador resuelve módulos vía importmap. Vite/webpack romperían el modelo.
 - **`PIXELES_ESTANDAR` is 16** — all size calculations derive from this. Don't hardcode `16` without referencing `PM.PIXELES_ESTANDAR`.
+- **Reutiliza antes de escribir** — antes de crear una clase o un helper, mira qué hay ya (`rg -n "^(export )?(class|function)" src/`). Un tipo de bloque nuevo **extiende `Cubo`**, no se copia; la física/geometría repetida entre `Esteban`, `Zombie` y `Cerdo` sube a un helper compartido en vez de vivir tres veces; los cálculos puros ya tienen sitio (`aabb.js`, `chunkMath.js`, `noise.js`) y las constantes están en `ParametrosMundo.js`. A la tercera copia se extrae en el mismo cambio, migrando los call sites y borrando las copias. `MyScene.js` ya es una god class: cada bloque de lógica duplicada que aterriza ahí la empeora.
 - **Chunk rebuild is expensive** — don't trigger `renderChunksAgain` unnecessarily. Block add/remove already rebuilds only the affected material mesh.
 - **`estaColindando` / `estaEnArbol`** are O(n) scans on small lists — fine for current chunk sizes, but mark if chunk size grows significantly.
 
