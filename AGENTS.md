@@ -1,8 +1,35 @@
-# MinaCubo Redux — Claude Guide
+# MinaCubo Redux — Agent Guide
 
 ## Start here
 
 Run `/graphify` before each session. The graph at `graphify-out/graph.json` maps module dependencies so you avoid re-reading the whole codebase every time.
+
+## Agent compatibility — Codex and Claude Code
+
+This file is `AGENTS.md`: the **one** instruction file for every coding agent in this repo. Codex reads
+it directly; Claude Code reads `CLAUDE.md`, which only imports this file (`@AGENTS.md`) and holds what
+applies to Claude alone. **Edit rules here, never in `CLAUDE.md`** — two copies of a rule drift apart
+on the first edit, and each agent then obeys a different one.
+
+| Concern | Claude Code | Codex |
+| --- | --- | --- |
+| Instruction file | `CLAUDE.md` → imports `AGENTS.md` | `AGENTS.md` (root down to the working directory) |
+| Invoke a skill | `Skill` tool, or `/<skill>` | mention it (`$<skill>`), or let it trigger from its description |
+| Skills on disk | `~/.claude/skills` (links into `~/.agents/skills`) | `.agents/skills`, then `~/.agents/skills` |
+| superpowers | `superpowers@claude-plugins-official` (`/plugin install`) | `superpowers@openai-curated` (install from `/plugins`; that id is its key in `~/.codex/config.toml`) |
+| MCP servers | `claude mcp add -s user <name> -- <cmd>` | `codex mcp add <name> -- <cmd>` (`~/.codex/config.toml`) |
+| File size | imports load whole | `project_doc_max_bytes`, **32 KiB by default** — raise it when this file is bigger, or the tail is silently dropped |
+
+- **Install shared skills once, for both agents:** `npx skills add <owner/repo> -g --skill <name>`
+  writes to `~/.agents/skills` and links it for Claude Code, so both run the same version.
+- **Names in this file are capabilities, not one agent's syntax.** "Invoke the `X` skill" means the
+  `Skill` tool in Claude Code and a skill mention in Codex. An MCP server named here is used when it is
+  registered for the agent you are running in; its absence never blocks ordinary work.
+- **Modes, model caps and Git rules bind both agents.** "lite mode", "normal mode" and "modo
+  desatendido" mean the same in Codex; a cap written as "no model above Sonnet" means "no model above
+  the mid tier" there.
+- **Claude-only commands** (`/graphify` and other slash commands that are not skills) are skipped by
+  Codex unless the same capability is installed as a skill in `~/.agents/skills`.
 
 ## ⚡ graphify — use every session
 
@@ -90,6 +117,142 @@ Todos los `.js` de aplicación viven en `src/`. Tests `*.test.js` viven junto al
 - **Block coordinate system**: world units = block units × `16 / PIXELES_ESTANDAR` = 1. Blocks sit at `y = v - 8/16` (centered, since BoxGeometry is centered at origin).
 - **Raycasting for interaction**: center-screen ray (`mouse = (0.5, 0.5)`). Face index 0–5 determines which side was hit, offset applied to get adjacent block position.
 - **Day/night**: TWEEN animates fog color + hemisphere light intensity from sky blue to black and back, repeat+yoyo, 60s cycle.
+
+## UI/UX workflow — stack-aware
+
+**Wide latitude in how the UI is made, no latitude in whether it came out well.** The agent may
+reach for any tool, library or technique below — or none of them — and may push the DOM chrome well
+past a bare-HTML default look. What it may not do is call UI done before the **real rendered surface
+has been observed, compared with the design context, critiqued, corrected and exercised end-to-end**.
+A single prompt-to-code pass is not a design loop.
+
+### Sources of truth
+
+1. **`PRODUCT.md` + root `DESIGN.md` belong to Impeccable.** Neither exists in this repo yet — run
+   `$impeccable teach` before the first UI-focused change; it explores the codebase and interviews you
+   about the game's direction, audience and personality, then writes both. Don't hand-author them or
+   let another tool overwrite them.
+2. **`design-system.md` is the portable design contract** — semantic color/type/shape, components,
+   states, motion and accessibility. It doesn't exist yet either; write it before treating any value
+   in `estilo.css` as settled. It maps to plain CSS custom properties + classes here — no Tailwind, no
+   component framework.
+3. **Generated design documents never land on the root files.** A tool's own `extract-design-md` or
+   similar writes its own `DESIGN.md`: save it below `docs/design/` with an explicit name and bring
+   over only the decisions you keep.
+
+### Creative latitude — the ceiling is the product, not the component library
+
+- **There's no base component library to treat as a floor.** DOM chrome (lil-gui HUD, menus, overlays,
+  `#pointer-lock-overlay`) is hand-rolled HTML/CSS in `index.html` + `estilo.css`; bespoke styling,
+  animation and layout are the default, not an escape hatch. **Three.js and custom GLSL shaders are
+  this repo's native medium for the 3D world**, not a stretch goal reserved for signature moments —
+  Impeccable's `bolder`, `delight`, `animate`, `colorize`, `overdrive` apply to the DOM chrome the same
+  way they would to a component-library UI; `quieter` and `distill` pull it back.
+- **Three conditions still hold:** work derives from a documented token/convention where one exists
+  (no `design-system.md` yet, see *Sources of truth* above) rather than a magic number scattered
+  across `estilo.css`; motion honours `prefers-reduced-motion` and is never required to finish a task;
+  and the result passes [UI done means observed](#ui-done-means-observed-not-generated).
+- **Where bespoke code lives.** DOM chrome markup/styles live in `index.html` + `estilo.css`;
+  expressive rendering (custom shaders, postprocessing, particle systems) lives beside the scene code
+  in `src/`.
+- **Generic is a defect.** An unstyled default `<input>`, a lil-gui panel with no visual identity, or a
+  3D world that never diverges from Three.js example defaults are exactly the anti-patterns
+  Impeccable's catalogue flags.
+
+### Explore wide, then converge
+
+For a **new HUD element, a redesign or a signature 3D moment**, render **two or three genuinely
+different directions** (layout, type scale, density, motion — or, for the 3D world, lighting, palette,
+camera framing) in the real stack before settling. Compare them against `PRODUCT.md` / `DESIGN.md`
+once they exist, pick one, and write in the spec or PR why it won — the losers are deleted, not kept
+as dead variants. Small changes to an existing screen skip this step. A hosted generator may seed a
+direction only under the privacy rule below.
+
+### Toolbox — capabilities, not dependencies
+
+The agent chooses. Each row names a **default** and **when to reach for something else**; none is a
+project dependency, and a missing one never blocks work — explain what it would add and ask before
+installing it. MCP names are the ones used by `claude mcp add` / `codex mcp add`; skills install for
+both agents with `npx skills add <owner/repo> -g --skill <name>` (see
+[Agent compatibility](#agent-compatibility--codex-and-claude-code)).
+
+**Privacy boundary:** never send source, screenshots, user data, unreleased product material or a
+running private UI to a **hosted** service (Stitch, 21st, Figma's remote server, Gemini) without
+explicit approval. Inspecting a local app with a local MCP server is not permission to upload it.
+Chrome DevTools MCP collects usage statistics unless started with `--no-usage-statistics`.
+
+**Coexistence:** one browser driver per session (Chrome DevTools MCP *or* Playwright MCP), and one
+generator per component — never splice the output of two generators into one piece.
+
+#### Web
+
+| Role | Default | Reach for instead when… | Runs |
+| --- | --- | --- | --- |
+| Direction and taste | Impeccable (`shape`, `critique`, `bolder`, `delight`, `animate`, `overdrive`, `typeset`, `colorize`) | `frontend-design` (anthropics/skills) for a committed aesthetic push; `ui-ux-pro-max` to search palettes, font pairings and styles | local |
+| DOM chrome markup/styles | hand-rolled HTML/CSS (`index.html`, `estilo.css`) — no component framework, no shadcn | a shadcn-compatible registry, only if the HUD ever migrates onto a component framework | local |
+| Observe the real page | Chrome DevTools MCP (`chrome-devtools`) — screenshots, DOM and accessibility tree, computed styles, console, network, performance traces | Playwright MCP (`playwright`) for scripted multi-step flows, other engines, or drafting a Playwright spec | local |
+| 3D scene / shaders | Three.js native APIs (`Scene`, `Material`, `ShaderMaterial` / GLSL) — this repo's native medium, not an escape hatch | `three/addons/` postprocessing passes for signature effects (bloom, outline) | local |
+| UX and accessibility audit | `web-design-guidelines` + Impeccable `audit`, scoped to the DOM chrome (HUD, overlays, menus) — the WebGL canvas has no accessibility tree | — | local, fetches the ruleset |
+| External references | the running game, screenshots the user supplied | Stitch MCP + `google-labs-code/stitch-skills`, 21st MCP, Figma MCP — **hosted, ask first** | hosted |
+| Deterministic gate | **none today.** No committed Playwright (or other) E2E suite exists — say so rather than inventing one. The Vitest unit suite on pure logic (`chunkMath`, `colisiones`, `estructuras`, `noise`) is the only automated gate, and it never touches rendered UI | — | local |
+
+### The loop
+
+```text
+PRODUCT.md + DESIGN.md + design-system.md (once they exist) + the change at hand
+                        ↓
+   explore wide (2–3 real directions) → converge, reasons written down
+                        ↓
+     build: hand-rolled DOM/CSS first, bespoke shaders where the scene needs it
+                        ↓
+          observe the REAL render (pixels + DOM/console/network)
+                        ↓
+  critique (Impeccable) → correct → observe again   ← repeat until it holds
+                        ↓
+            polish → performance measured → a11y audited (DOM chrome only)
+                        ↓
+   Vitest on pure logic (no deterministic E2E gate exists yet — see Toolbox above)
+```
+
+**Never accept the first render.** Inspect the primary HUD/overlay/menu plus its loading, empty,
+error, disabled and validation states where they exist; every supported browser width; both day and
+night lighting states; pointer-lock and keyboard/mouse behaviour; contrast; text overflow in the HUD
+and menus. A UI that matches a screenshot but breaks at a different viewport, outside pointer-lock, or
+at night is not polished.
+
+### Web / Vanilla JS + Three.js
+
+- **DOM chrome:** hand-roll markup in `index.html` and styles in `estilo.css`; no shadcn, no Next.js,
+  no bundler — there is no primitive registry to search first, so `estilo.css` conventions **are** the
+  design system until `design-system.md` exists.
+- **Observe what shipped, not what the source implies:** screenshots at the supported widths, the DOM
+  and accessibility tree for the chrome, console and network (an importmap 404 is silent otherwise —
+  see [Real-environment verification](#real-environment-verification--what-no-in-process-test-can-prove)).
+  When an interaction feels heavy, record a performance trace instead of guessing.
+- **Chrome DevTools and Playwright MCP observe; nothing proves it yet.** There's no committed
+  deterministic E2E suite — see the Toolbox's *Deterministic gate* row above and
+  [Real-environment verification](#real-environment-verification--what-no-in-process-test-can-prove)
+  for what closes that gap.
+
+### UI done means observed, not generated
+
+Before calling UI work complete, verify all of these that apply:
+
+- the real render was inspected in the browser **after the final code change**, not only before it;
+- for a new HUD element, overlay or signature 3D moment, directions were explored and the choice is
+  written down;
+- the DOM chrome was checked at the supported viewport widths;
+- loading/empty/error/disabled/validation states were seen where they exist, not inferred from source;
+- keyboard/pointer-lock behaviour and DOM chrome accessibility semantics are usable, and reduced
+  motion is honoured;
+- performance of the main interaction was measured (a Chrome DevTools trace, or `npm run bench`), not
+  assumed;
+- every new value exists as a token once `design-system.md` exists — until then, note the value's
+  origin in the PR;
+- the result was compared against `PRODUCT.md` + `DESIGN.md` once they exist, then critiqued and
+  polished;
+- **no deterministic E2E gate exists to close this loop today** — say so rather than claiming one
+  passed.
 
 ## Tests
 
@@ -225,6 +388,61 @@ dead flows, off-spec screens.
 - **Hard limits.** The verdict awaits your close and the agent **never merges** (see *Git &
   GitHub*). Scope `--allowedTools`; use `--dangerously-skip-permissions` only in a controlled
   local env.
+- **The verdict reads structure too.** Besides the boot/smoke check, it names what the diff does to
+  the [Design principles](#design-principles--solid-applied-with-judgement): a new violation (a DOM
+  chrome function reaching into Three.js internals, one more branch in a growing block-type `switch`)
+  or a new speculative abstraction. Findings, not a veto — like the rest of the pass.
+
+## Design principles — SOLID, applied with judgement
+
+SOLID is a list of **symptoms to look for**, not a pattern to apply. Every one of the five exists to
+keep a change local: the useful question is *how many files does the next plausible change touch, and
+how many of them do you have to understand first?* Applied by rote it produces the opposite — an
+interface per class, a factory for one product, an eight-file feature — so here it is bounded by YAGNI
+and by reuse-first judgement (search for the existing block type, helper or pure module before adding
+a new one).
+
+| Principle | Checkable smell | Usual fix |
+| --- | --- | --- |
+| **S — Single responsibility**: one reason to change | the description needs "and"; the file changes in PRs about unrelated features; a test mocks things unrelated to what it asserts; a component both fetches and lays out | split along the reason to change — IO, decision, presentation |
+| **O — Open/closed**: extend without editing | adding a case edits a growing `switch`/`if` chain in several places; one boolean prop per variant | a variants map, strategy, slot or registry — introduced at the second real case, not the first |
+| **L — Liskov substitution**: subtypes keep the contract | an override throws "not supported"; callers check the concrete type before calling; a variant drops the base's disabled, focus or semantics | narrow the base contract, or stop inheriting and compose |
+| **I — Interface segregation**: clients see only what they use | a fake implements methods the test never calls; a whole entity is passed to read two fields; a `Service` with fifteen methods | split by client need; pass the fields, not the bag |
+| **D — Dependency inversion**: policy does not import mechanism | domain or UI code imports `fetch`, the ORM, `Date.now()` or `fs` directly; a unit test needs a network or a database | depend on a port the caller owns (interface, function, hook); wire the adapter at the edge |
+
+### In UI code
+
+- **S:** a component **presents or orchestrates**, not both. `MyScene.js` already breaks this — it
+  owns the game loop, chunk system, rendering and input handling at once — so a new feature is a
+  reason to extract, not to add a sixteenth responsibility to the same class.
+- **O:** a new block type or NPC is a **new class extending `Cubo` / composing shared behaviour**, not
+  another branch inside `MyScene.js`'s update loop.
+- **L:** every `Cubo` subtype keeps the base's guarantees — geometry, multi-material slots, the
+  contract `colisiones.js` expects. A block that special-cases itself in the collision or render path
+  is not a variant of `Cubo`; it is a regression wearing a subclass.
+- **I:** narrow constructor args and method surfaces; never pass a whole `MyScene` reference to read
+  one field.
+- **D:** pure modules (`aabb.js`, `chunkMath.js`, `noise.js`) never import Three.js or touch the DOM;
+  `MyScene.js` and the DOM chrome depend on them, not the other way round.
+
+### Where the seams go, per stack
+
+| Stack | Seams |
+| --- | --- |
+| Vanilla JS (Three.js) | scene/entity classes (`MyScene`, `Cubo` and its subtypes, `Esteban`, `Zombie`, `Cerdo`) own state and rendering; pure computation stays extracted (`aabb.js`, `chunkMath.js`, `noise.js`, `estructuras.js`); DOM chrome (`index.html` / `estilo.css`) reads game state through plain functions, never reaching into Three.js internals directly |
+
+### Where SOLID stops
+
+- **No interface, abstract class or factory without one of:** a second real implementation, an IO
+  boundary (network, filesystem, clock, randomness, the DOM), or a test that cannot be written without
+  the seam. "We might swap it later" is not on the list.
+- **Reuse first beats speculative extension points:** add the parameter to the existing `Cubo` subtype
+  or helper before inventing a plugin system for it.
+- **Speculative abstraction is a review finding**, exactly like a violation: an interface with one
+  implementation and no IO behind it gets inlined.
+- **Refactor toward SOLID when a change hurts**, in the PR that felt the pain — not as a drive-by
+  rewrite of code nobody is changing (`MyScene.js`'s god-class status is tracked, not rewritten,
+  until a change actually needs the split).
 
 ## Working rules
 
@@ -232,7 +450,12 @@ dead flows, off-spec screens.
   fan-out on a bare estimate; wrap it in
   `systemd-run --user --scope -p MemoryHigh=5G -p MemoryMax=6G -p MemorySwapMax=0 -- <command>`
   and cap the tool's own concurrency too.
-- **UI work → design context first, then `impeccable` + superpowers** — for any UI change (the DOM chrome: lil-gui HUD, menus, overlays — the 3D world is out of scope), invoke the `impeccable` skill. **If the project has no design context (`PRODUCT.md` / `DESIGN.md` at the repo root), run `$impeccable teach`** — it explores the codebase and interviews you about the project's direction, then writes `PRODUCT.md` + `DESIGN.md` (auto-migrating a legacy `.impeccable.md` → `PRODUCT.md`); never hand-author it. Don't hand-roll UI without impeccable + superpowers.
+- **UI work → design context first, then wide latitude, then the observed-quality gate** — for any UI change (the DOM chrome: lil-gui HUD, menus, overlays — the 3D world is out of scope for this rule, though three.js/shaders are fair game as this repo's native medium, see [UI/UX workflow](#uiux-workflow--stack-aware)), invoke the `impeccable` skill. **If the project has no design context (`PRODUCT.md` / `DESIGN.md` at the repo root), run `$impeccable teach`** — it explores the codebase and interviews you about the project's direction, then writes `PRODUCT.md` + `DESIGN.md` (auto-migrating a legacy `.impeccable.md` → `PRODUCT.md`); never hand-author it. Follow [UI/UX workflow — stack-aware](#uiux-workflow--stack-aware) for the full loop — there's no deterministic E2E gate today, so say that rather than claiming one passed. Don't hand-roll UI without impeccable + superpowers.
+- **SOLID where it pays, not by rote** — split by reason to change, extend through a new `Cubo`
+  subtype or variant rather than another branch, keep subtypes honest, keep constructors/props narrow,
+  and push IO (Three.js, the DOM, `Date.now()`) behind a seam only when there's a second implementation
+  or a test needs it. No abstraction without a second implementation, an IO boundary or a test seam.
+  See [Design principles](#design-principles--solid-applied-with-judgement).
 - **Deps via npm + importmap; pregunta antes de añadir una** — añadir un paquete está permitido cuando hace falta de verdad, pero pregunta antes de instalarlo (cuál, por qué, qué sustituye) y espera el visto bueno. Después: `npm install <pkg>` + entrada nueva en el importmap de `index.html` apuntando a `/node_modules/<pkg>/...`. Imports en JS usan bare specifiers (`import x from 'pkg'`).
 - **No bundler** — el navegador resuelve módulos vía importmap. Vite/webpack romperían el modelo.
 - **`PIXELES_ESTANDAR` is 16** — all size calculations derive from this. Don't hardcode `16` without referencing `PM.PIXELES_ESTANDAR`.
