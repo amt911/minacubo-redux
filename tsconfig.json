@@ -15,5 +15,5 @@
     }
   },
   "include": ["src/**/*.js"],
-  "exclude": ["node_modules", "coverage", "graphify-out", "**/*.test.js"]
+  "exclude": ["node_modules", "coverage", "graphify-out", "**/*.test.js", "**/*.stories.js"]
 }

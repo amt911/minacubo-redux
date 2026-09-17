@@ -24,18 +24,27 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@storybook/addon-docs": "^10.6.0",
+    "@storybook/addon-mcp": "^10.6.0",
+    "@storybook/html-vite": "^10.6.0",
     "@types/three": "^0.184.1",
     "@vitest/coverage-v8": "^4.1.6",
     "eslint": "^10.4.0",
+    "eslint-plugin-storybook": "^10.6.0",
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
     "prettier": "^3.8.3",
     "puppeteer-core": "^25.0.4",
     "serve": "^14.2.6",
+    "storybook": "^10.6.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
   },
