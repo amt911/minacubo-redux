@@ -9,3 +9,9 @@ dist/
 .env.local
 graphify-out/
 resources/
+
+*storybook.log
+storybook-static
+
+test-results/
+playwright-report/

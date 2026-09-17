@@ -88,6 +88,12 @@ Run:
 
 Requires `npm install` first (deps en `node_modules/` servidas estáticamente).
 
+- **Storybook**: `npm run storybook` (dev server, :6006) · `npm run build-storybook` (static
+  build). Its MCP server (`@storybook/addon-mcp`) is registered in `.mcp.json` (Claude Code) and
+  `.codex/config.toml` (Codex) at `http://localhost:6006/mcp`; needs `storybook dev` running.
+- **E2E smoke (Playwright)**: `npm run test:e2e` — boots its own `serve` on port 3010 (never 3000
+  or 8080), asserts the page loads, the WebGL canvas is present and no console errors fired.
+
 **Dev server siempre corriendo en <http://localhost:8080> durante sesiones.** No levantar otro servidor (`npm run dev`, `serve`, etc.) — el usuario ya lo tiene abierto. Los cambios a `src/` se sirven en caliente; basta con que el usuario refresque el navegador para probar.
 
 ## File map
