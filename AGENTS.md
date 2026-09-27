@@ -374,6 +374,21 @@ What "real environment" means here, concretely:
   npm test                        # deterministic logic stays the hard gate
   ```
 
+## Docker — the prod image
+
+`Dockerfile.prod` builds the static site and serves it with `nginx:alpine`; `Dockerfile.dev` is the
+watcher. They are separate files, so "`prod` is the last stage" is guaranteed by construction — keep
+it that way rather than merging them into one multi-stage file with `dev` at the end (a build with
+no `--target` would ship the watcher; that bug reached production in `calorie-monitor-api`).
+Canonical text: `claude-md` `docs/starter-kit/AGENTS.template.md` § *Docker & deploy*.
+
+- **Healthcheck on every service.** Coolify (and plain Docker) use the image's `HEALTHCHECK`;
+  Traefik stops routing to an unhealthy container and rolling updates wait for the new one to be
+  healthy. `nginx:alpine` ships busybox `wget`, so: `HEALTHCHECK CMD wget -q --spider
+  http://127.0.0.1/ || exit 1`.
+
+**State on `main` (2026-09-27):** no `HEALTHCHECK` in `Dockerfile.prod` yet.
+
 ## Agentic PR verification (MANDATORY on every PR)
 
 **Every PR MUST be verified end-to-end before merge, and the verdict MUST be posted as a PR
